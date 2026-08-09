@@ -33,3 +33,4 @@ structlog==24.4.0
 tenacity==9.0.0
 beautifulsoup4==4.12.3
 markdown==3.7
+
