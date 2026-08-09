@@ -1,0 +1,128 @@
+version: "3.9"
+
+services:
+  # === CORE APPLICATION ===
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-platform-app
+    restart: always
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/files:/app/data/files
+      - ./data/logs:/app/data/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ai-net
+
+  # === WORKER (Background agents) ===
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-platform-worker
+    restart: always
+    command: python -m app.worker
+    env_file: .env
+    volumes:
+      - ./data/files:/app/data/files
+      - ./data/logs:/app/data/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ai-net
+
+  # === SCHEDULER (Cron-like agent triggers) ===
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ai-platform-scheduler
+    restart: always
+    command: python -m app.scheduler
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - ai-net
+
+  # === DATABASE ===
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ai-platform-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai-net
+
+  # === CACHE + TASK QUEUE ===
+  redis:
+    image: redis:7-alpine
+    container_name: ai-platform-redis
+    restart: always
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai-net
+
+  # === REVERSE PROXY ===
+  caddy:
+    image: caddy:2-alpine
+    container_name: ai-platform-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    networks:
+      - ai-net
+
+volumes:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+
+networks:
+  ai-net:
+    driver: bridge

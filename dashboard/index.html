@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Operations Platform</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+    --bg: #0a0a0f; --surface: #12121a; --surface2: #1a1a2e; --border: #2a2a3e;
+    --text: #e4e4ef; --text2: #8888a0; --accent: #7c6cf0; --accent2: #5b4dd4;
+    --green: #34d399; --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+.layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
+
+/* Sidebar */
+.sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 24px 0; display: flex; flex-direction: column; }
+.logo { padding: 0 24px 24px; font-size: 18px; font-weight: 600; color: var(--accent); border-bottom: 1px solid var(--border); }
+.logo span { color: var(--text2); font-weight: 400; font-size: 12px; display: block; margin-top: 4px; }
+.nav { padding: 16px 12px; flex: 1; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; color: var(--text2); transition: all 0.15s; margin-bottom: 2px; font-size: 14px; }
+.nav-item:hover, .nav-item.active { background: var(--surface2); color: var(--text); }
+.nav-item.active { border-left: 3px solid var(--accent); }
+.nav-dot { width: 8px; height: 8px; border-radius: 50%; }
+.nav-dot.online { background: var(--green); }
+.nav-dot.idle { background: var(--yellow); }
+.nav-dot.error { background: var(--red); }
+.sidebar-footer { padding: 16px 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); }
+
+/* Main content */
+.main { padding: 24px 32px; overflow-y: auto; }
+.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
+.header h1 { font-size: 24px; font-weight: 600; }
+.header-actions { display: flex; gap: 12px; }
+.btn { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-size: 13px; transition: all 0.15s; }
+.btn:hover { border-color: var(--accent); }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent2); }
+
+/* Metric cards */
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.metric-label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+.metric-value { font-size: 28px; font-weight: 700; }
+.metric-change { font-size: 12px; margin-top: 4px; }
+.metric-change.up { color: var(--green); }
+.metric-change.down { color: var(--red); }
+
+/* Agent cards */
+.agents-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.agent-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.agent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.agent-name { font-size: 16px; font-weight: 600; }
+.agent-status { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+.agent-status.idle { background: rgba(52,211,153,0.15); color: var(--green); }
+.agent-status.processing { background: rgba(96,165,250,0.15); color: var(--blue); }
+.agent-status.error { background: rgba(248,113,113,0.15); color: var(--red); }
+.agent-stats { display: flex; gap: 16px; margin-top: 12px; }
+.agent-stat { font-size: 12px; color: var(--text2); }
+.agent-stat strong { color: var(--text); font-size: 16px; display: block; }
+
+/* Activity feed */
+.section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.feed { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.feed-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
+.feed-item:last-child { border-bottom: none; }
+.feed-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
+.feed-icon.email { background: rgba(124,108,240,0.15); color: var(--accent); }
+.feed-icon.finance { background: rgba(251,191,36,0.15); color: var(--yellow); }
+.feed-icon.support { background: rgba(248,113,113,0.15); color: var(--red); }
+.feed-icon.sales { background: rgba(52,211,153,0.15); color: var(--green); }
+.feed-icon.dev { background: rgba(96,165,250,0.15); color: var(--blue); }
+.feed-text { flex: 1; }
+.feed-text strong { font-size: 13px; }
+.feed-text p { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.feed-time { font-size: 11px; color: var(--text2); white-space: nowrap; }
+
+/* Chat panel */
+.chat-section { margin-top: 24px; }
+.chat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+.chat-messages { height: 300px; overflow-y: auto; padding: 16px; }
+.chat-msg { margin-bottom: 12px; }
+.chat-msg.user { text-align: right; }
+.chat-msg .bubble { display: inline-block; padding: 8px 14px; border-radius: 12px; max-width: 80%; font-size: 14px; }
+.chat-msg.user .bubble { background: var(--accent); color: #fff; }
+.chat-msg.ai .bubble { background: var(--surface2); }
+.chat-input { display: flex; border-top: 1px solid var(--border); }
+.chat-input input { flex: 1; padding: 14px 16px; background: transparent; border: none; color: var(--text); font-size: 14px; outline: none; }
+.chat-input button { padding: 14px 20px; background: var(--accent); border: none; color: #fff; cursor: pointer; font-size: 14px; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .metrics { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+    <aside class="sidebar">
+        <div class="logo">AI Platform<span>Operations Center</span></div>
+        <nav class="nav">
+            <div class="nav-item active" onclick="showSection('overview')">
+                <span>&#9632;</span> Overview
+            </div>
+            <div class="nav-item" onclick="showSection('agents')">
+                <span>&#9654;</span> Agents
+            </div>
+            <div class="nav-item" onclick="showSection('email')">
+                <span class="nav-dot online"></span> Email Agent
+            </div>
+            <div class="nav-item" onclick="showSection('finance')">
+                <span class="nav-dot online"></span> Finance Agent
+            </div>
+            <div class="nav-item" onclick="showSection('marketing')">
+                <span class="nav-dot idle"></span> Marketing Agent
+            </div>
+            <div class="nav-item" onclick="showSection('sales')">
+                <span class="nav-dot online"></span> Sales Agent
+            </div>
+            <div class="nav-item" onclick="showSection('support')">
+                <span class="nav-dot online"></span> Support Agent
+            </div>
+            <div class="nav-item" onclick="showSection('dev')">
+                <span class="nav-dot online"></span> Dev Agent
+            </div>
+            <div class="nav-item" onclick="showSection('chat')">
+                <span>&#128172;</span> Chat
+            </div>
+            <div class="nav-item" onclick="showSection('audit')">
+                <span>&#128203;</span> Audit Log
+            </div>
+        </nav>
+        <div class="sidebar-footer">
+            <div id="ai-cost">API cost today: loading...</div>
+            <div id="uptime">Uptime: calculating...</div>
+        </div>
+    </aside>
+
+    <main class="main">
+        <div class="header">
+            <h1 id="page-title">Overview</h1>
+            <div class="header-actions">
+                <button class="btn" onclick="refreshData()">Refresh</button>
+                <button class="btn btn-primary" onclick="showSection('chat')">Chat with AI</button>
+            </div>
+        </div>
+
+        <!-- Metrics -->
+        <div class="metrics" id="metrics">
+            <div class="metric-card">
+                <div class="metric-label">Tasks (24h)</div>
+                <div class="metric-value" id="m-tasks">-</div>
+                <div class="metric-change up" id="m-tasks-change"></div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Emails processed</div>
+                <div class="metric-value" id="m-emails">-</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Open tickets</div>
+                <div class="metric-value" id="m-tickets">-</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Revenue (MTD)</div>
+                <div class="metric-value" id="m-revenue">-</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Pipeline leads</div>
+                <div class="metric-value" id="m-leads">-</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">AI tokens used</div>
+                <div class="metric-value" id="m-tokens">-</div>
+            </div>
+        </div>
+
+        <!-- Agent cards -->
+        <div class="section-title">Agents</div>
+        <div class="agents-grid" id="agents-grid"></div>
+
+        <!-- Activity feed -->
+        <div class="section-title">Recent activity</div>
+        <div class="feed" id="activity-feed">
+            <div class="feed-item">
+                <div class="feed-icon email">&#9993;</div>
+                <div class="feed-text"><strong>Loading activity...</strong><p>Connecting to platform</p></div>
+                <div class="feed-time">now</div>
+            </div>
+        </div>
+
+        <!-- Chat section (hidden by default) -->
+        <div class="chat-section" id="chat-section" style="display:none;">
+            <div class="chat-box">
+                <div class="chat-messages" id="chat-messages">
+                    <div class="chat-msg ai"><div class="bubble">Hello! I'm the AI Operations Platform. Ask me anything or give me a task.</div></div>
+                </div>
+                <div class="chat-input">
+                    <input type="text" id="chat-input" placeholder="Ask the AI anything..." onkeydown="if(event.key==='Enter')sendChat()">
+                    <button onclick="sendChat()">Send</button>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<script>
+const API = '';  // Same origin
+
+async function fetchJSON(url) {
+    try {
+        const r = await fetch(API + url);
+        return await r.json();
+    } catch(e) {
+        console.error('Fetch error:', e);
+        return null;
+    }
+}
+
+async function refreshData() {
+    // Overview metrics
+    const overview = await fetchJSON('/api/dashboard/overview');
+    if (overview) {
+        const tasks24h = overview.tasks_24h || {};
+        const totalTasks = Object.values(tasks24h).reduce((a,b) => a+b, 0);
+        document.getElementById('m-tasks').textContent = totalTasks;
+
+        const emails24h = overview.emails_24h || {};
+        const totalEmails = Object.values(emails24h).reduce((a,b) => a+b, 0);
+        document.getElementById('m-emails').textContent = totalEmails;
+
+        const tickets = overview.tickets || {};
+        document.getElementById('m-tickets').textContent = tickets.open || 0;
+
+        const rev = overview.month_revenue || 0;
+        document.getElementById('m-revenue').textContent = new Intl.NumberFormat('da-DK', {
+            style: 'currency', currency: 'DKK', maximumFractionDigits: 0
+        }).format(rev);
+
+        const pipeline = overview.pipeline || {};
+        const leads = Object.values(pipeline).reduce((a,b) => a+b, 0);
+        document.getElementById('m-leads').textContent = leads;
+
+        const aiStats = overview.ai_stats || {};
+        const tokens = (aiStats.total_input_tokens || 0) + (aiStats.total_output_tokens || 0);
+        document.getElementById('m-tokens').textContent = tokens > 1000 ? (tokens/1000).toFixed(1) + 'k' : tokens;
+        document.getElementById('ai-cost').textContent = `API cost: $${(aiStats.estimated_cost_usd || 0).toFixed(2)}`;
+    }
+
+    // Agents
+    const agents = await fetchJSON('/api/agents');
+    if (agents) {
+        const grid = document.getElementById('agents-grid');
+        grid.innerHTML = agents.map(a => `
+            <div class="agent-card">
+                <div class="agent-header">
+                    <div class="agent-name">${a.name}</div>
+                    <div class="agent-status ${a.status}">${a.status}</div>
+                </div>
+                <div class="agent-stats">
+                    <div class="agent-stat"><strong>${(a.stats?.tasks_completed || 0)}</strong>completed</div>
+                    <div class="agent-stat"><strong>${(a.stats?.errors || 0)}</strong>errors</div>
+                    <div class="agent-stat"><strong>${a.last_run ? timeAgo(a.last_run) : 'never'}</strong>last run</div>
+                </div>
+            </div>
+        `).join('');
+
+        // Update sidebar dots
+        agents.forEach(a => {
+            const dots = document.querySelectorAll('.nav-dot');
+            // Simple mapping
+        });
+    }
+
+    // Activity feed
+    const audit = await fetchJSON('/api/audit?limit=15');
+    if (audit && audit.length) {
+        const feed = document.getElementById('activity-feed');
+        const iconMap = {
+            'email-agent': { cls: 'email', icon: '&#9993;' },
+            'finance-agent': { cls: 'finance', icon: '&#128176;' },
+            'marketing-agent': { cls: 'sales', icon: '&#128200;' },
+            'sales-agent': { cls: 'sales', icon: '&#129309;' },
+            'support-agent': { cls: 'support', icon: '&#127919;' },
+            'dev-agent': { cls: 'dev', icon: '&#128187;' },
+        };
+        feed.innerHTML = audit.map(a => {
+            const ic = iconMap[a.agent] || { cls: 'email', icon: '&#9632;' };
+            return `
+                <div class="feed-item">
+                    <div class="feed-icon ${ic.cls}">${ic.icon}</div>
+                    <div class="feed-text">
+                        <strong>${a.agent || 'system'}</strong>
+                        <p>${a.action}${a.user_approved ? '' : ' (needs approval)'}</p>
+                    </div>
+                    <div class="feed-time">${a.time ? timeAgo(a.time) : ''}</div>
+                </div>
+            `;
+        }).join('');
+    }
+}
+
+function timeAgo(dateStr) {
+    const diff = (Date.now() - new Date(dateStr)) / 1000;
+    if (diff < 60) return Math.floor(diff) + 's ago';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+    return Math.floor(diff/86400) + 'd ago';
+}
+
+function showSection(section) {
+    document.getElementById('page-title').textContent =
+        section.charAt(0).toUpperCase() + section.slice(1);
+
+    // Toggle chat
+    document.getElementById('chat-section').style.display =
+        section === 'chat' ? 'block' : 'none';
+
+    // Update nav
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    event.currentTarget?.classList.add('active');
+}
+
+async function sendChat() {
+    const input = document.getElementById('chat-input');
+    const msg = input.value.trim();
+    if (!msg) return;
+    input.value = '';
+
+    const messages = document.getElementById('chat-messages');
+    messages.innerHTML += `<div class="chat-msg user"><div class="bubble">${escapeHtml(msg)}</div></div>`;
+    messages.scrollTop = messages.scrollHeight;
+
+    messages.innerHTML += `<div class="chat-msg ai"><div class="bubble" id="typing">Thinking...</div></div>`;
+
+    try {
+        const r = await fetch(API + '/api/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ message: msg }),
+        });
+        const data = await r.json();
+        document.getElementById('typing').textContent = data.response;
+    } catch(e) {
+        document.getElementById('typing').textContent = 'Error: ' + e.message;
+    }
+    messages.scrollTop = messages.scrollHeight;
+}
+
+function escapeHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Initial load
+refreshData();
+// Auto-refresh every 30s
+setInterval(refreshData, 30000);
+
+// Uptime counter
+const startTime = Date.now();
+setInterval(() => {
+    const s = Math.floor((Date.now() - startTime) / 1000);
+    const h = Math.floor(s/3600);
+    const m = Math.floor((s%3600)/60);
+    document.getElementById('uptime').textContent = `Session: ${h}h ${m}m`;
+}, 10000);
+</script>
+</body>
+</html>
