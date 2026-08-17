@@ -2,15 +2,16 @@
 AI Operations Platform — Main FastAPI application.
 Serves the dashboard, REST API, and webhook endpoints.
 """
+import base64
 import json
 import re
 import structlog
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
@@ -23,6 +24,7 @@ from app.services.ai_engine import ai, WEB_SEARCH_TOOL
 from app.services.audit import audit
 from app.services.memory import memory
 from app.agents import get_agent, AGENTS
+from app.agents.openai_assistant import openai_assistant
 
 structlog.configure(
     processors=[
@@ -314,38 +316,42 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    """Chat with an agent.
+    """Chat endpoint.
 
-    The personal assistant handles every message directly with a single AI
-    call (including automatic web search when needed). It only routes to a
-    specialist agent when the user explicitly asks for one (e.g. "brug
-    email-agent") — no separate classification call is made. A "set alarm to
-    HH:MM" request is caught first via keyword matching, with no AI call at all.
+    Default: the OpenAI assistant (GPT-4o) handles the message. It can call
+    the Claude specialist agents internally via function calling when
+    relevant, and always composes the final answer itself — the user never
+    sees the handoff. The Claude agents (including personal-assistant) still
+    work exactly as before when called explicitly, via `agent_id` or an
+    explicit "brug X-agent" request in the message. A "set alarm to HH:MM"
+    request is caught first via keyword matching, with no AI call at all.
     """
+    explicitly_routed = bool(req.agent_id and req.agent_id in AGENTS)
+
     alarm_time = detect_alarm_time(req.message)
-    if alarm_time and not (req.agent_id and req.agent_id in AGENTS):
+    if alarm_time and not explicitly_routed:
         alarm = await create_alarm(alarm_time)
         await audit.log_action(
-            "personal-assistant", "alarm_created_via_chat", {"time": alarm_time}
+            "openai-assistant", "alarm_created_via_chat", {"time": alarm_time}
         )
         return {
             "response": f"Alarm sat til kl. {alarm_time} ⏰ (gentages dagligt)",
-            "agent": "personal-assistant",
+            "agent": "openai-assistant",
             "alarm": alarm,
         }
 
-    if req.agent_id and req.agent_id in AGENTS:
-        agent_id = req.agent_id
-    else:
-        agent_id = detect_explicit_agent(req.message) or "personal-assistant"
+    agent_id = req.agent_id if explicitly_routed else detect_explicit_agent(req.message)
 
-    agent = get_agent(agent_id)
-    # Only the personal assistant gets live web search — specialist agents
-    # work off the DB/integrations they already have.
-    tools = [WEB_SEARCH_TOOL] if agent_id == "personal-assistant" else None
-    response = await agent.quick_think(req.message, tools=tools)
+    if agent_id:
+        # Explicit routing to a Claude agent — unchanged behavior.
+        agent = get_agent(agent_id)
+        tools = [WEB_SEARCH_TOOL] if agent_id == "personal-assistant" else None
+        response = await agent.quick_think(req.message, tools=tools)
+        return {"response": response, "agent": agent_id}
 
-    return {"response": response, "agent": agent_id}
+    # Default: the OpenAI assistant, which may delegate to Claude specialists internally.
+    response = await openai_assistant.chat(req.message)
+    return {"response": response, "agent": "openai-assistant"}
 
 
 # === WEB SEARCH ===
@@ -356,6 +362,55 @@ async def web_search(q: str):
         raise HTTPException(400, "Query parameter 'q' is required")
     answer = await ai.web_search_answer(q)
     return {"query": q, "answer": answer}
+
+
+# === VOICE (OpenAI Whisper + TTS) ===
+class SpeakRequest(BaseModel):
+    text: str
+
+
+@app.post("/api/voice/transcribe")
+async def voice_transcribe(audio: UploadFile = File(...)):
+    """Speech-to-text via Whisper. Returns the transcribed text."""
+    audio_bytes = await audio.read()
+    if not audio_bytes:
+        raise HTTPException(400, "Tom lyd-fil")
+    text_out = await openai_assistant.transcribe(audio_bytes, filename=audio.filename or "audio.webm")
+    return {"text": text_out}
+
+
+@app.post("/api/voice/speak")
+async def voice_speak(req: SpeakRequest):
+    """Text-to-speech via OpenAI TTS. Returns raw MP3 audio."""
+    if not req.text or not req.text.strip():
+        raise HTTPException(400, "text må ikke være tom")
+    audio_bytes = await openai_assistant.speak(req.text)
+    return Response(content=audio_bytes, media_type="audio/mpeg")
+
+
+@app.post("/api/voice/chat")
+async def voice_chat(audio: UploadFile = File(...)):
+    """Full voice round-trip: transcribe → chat with the assistant → speak the reply.
+
+    Returns the reply text plus base64-encoded MP3 audio in one JSON response,
+    so the dashboard can render the bubble and play the audio together.
+    """
+    audio_bytes = await audio.read()
+    if not audio_bytes:
+        raise HTTPException(400, "Tom lyd-fil")
+
+    user_text = await openai_assistant.transcribe(audio_bytes, filename=audio.filename or "audio.webm")
+    if not user_text or not user_text.strip():
+        raise HTTPException(400, "Kunne ikke genkende tale i optagelsen")
+
+    reply_text = await openai_assistant.chat(user_text)
+    reply_audio = await openai_assistant.speak(reply_text)
+
+    return {
+        "transcript": user_text,
+        "text": reply_text,
+        "audio_base64": base64.b64encode(reply_audio).decode("ascii"),
+    }
 
 
 # === ALARMS ===

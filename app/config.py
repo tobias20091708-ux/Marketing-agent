@@ -79,6 +79,10 @@ class Settings(BaseSettings):
     support_auto_resolve_l1: bool = True
     support_escalation_channel: str = "support-escalation"
 
+    # Notion (tone/style context for the OpenAI assistant)
+    notion_api_key: str = ""
+    notion_page_id: str = ""
+
     # Monitoring
     enable_prometheus: bool = True
     log_level: str = "INFO"

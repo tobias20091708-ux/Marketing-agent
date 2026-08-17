@@ -6,7 +6,9 @@ import asyncio
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from app.services.task_queue import queue
+from app.services.notion_reader import notion_reader
 from app.config import settings
 from sqlalchemy import text
 from app.database import async_session
@@ -28,8 +30,22 @@ async def trigger_agent_task(agent_id: str, task_type: str, payload: dict = None
     await queue.enqueue(agent_id, task_type, payload or {}, priority=5)
 
 
+async def refresh_notion_context():
+    """Re-fetch the Notion tone/style document that feeds the OpenAI assistant's system prompt."""
+    log.info("scheduler.notion_refresh")
+    await notion_reader.refresh()
+
+
 def setup_default_schedules():
     """Set up default scheduled tasks."""
+
+    # Notion: re-fetch the tone/style document every 6 hours
+    scheduler.add_job(
+        refresh_notion_context,
+        IntervalTrigger(hours=6),
+        id="notion_context_refresh",
+        replace_existing=True,
+    )
 
     # Email: check inbox every 60 seconds
     scheduler.add_job(
