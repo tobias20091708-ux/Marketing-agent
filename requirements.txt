@@ -31,6 +31,7 @@ apscheduler==3.10.4
 prometheus-client==0.21.1
 structlog==24.4.0
 tenacity==9.0.0
+tzdata==2024.2
 beautifulsoup4==4.12.3
 markdown==3.7
 

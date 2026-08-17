@@ -3,10 +3,13 @@ AI Operations Platform — Main FastAPI application.
 Serves the dashboard, REST API, and webhook endpoints.
 """
 import json
+import re
 import structlog
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from fastapi import FastAPI, HTTPException, Request, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -16,7 +19,7 @@ from sqlalchemy import text
 from app.config import settings
 from app.database import async_session
 from app.services.task_queue import queue
-from app.services.ai_engine import ai
+from app.services.ai_engine import ai, WEB_SEARCH_TOOL
 from app.services.audit import audit
 from app.services.memory import memory
 from app.agents import get_agent, AGENTS
@@ -31,6 +34,117 @@ structlog.configure(
 log = structlog.get_logger()
 
 app = FastAPI(title="AI Operations Platform", version="1.0.0")
+
+# CORS — allow the dashboard (or any origin) to reach the API.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,  # must be False when allow_origins is "*"
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+LOCAL_TZ = ZoneInfo("Europe/Copenhagen")
+
+
+@app.on_event("startup")
+async def ensure_alarms_table():
+    """Idempotently ensure the alarms table exists.
+
+    Railway's managed Postgres doesn't auto-run init.sql-style scripts, so
+    the app creates the table itself on boot (see alarms_migration.sql for
+    the same DDL, kept for manual/documentation purposes).
+    """
+    async with async_session() as db:
+        await db.execute(
+            text("""
+                CREATE TABLE IF NOT EXISTS alarms (
+                    id SERIAL PRIMARY KEY,
+                    time TIME NOT NULL,
+                    label TEXT,
+                    repeat VARCHAR(20) DEFAULT 'daily',
+                    active BOOLEAN DEFAULT true,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+        )
+        await db.execute(text("CREATE INDEX IF NOT EXISTS idx_alarms_active ON alarms(active)"))
+        await db.commit()
+
+
+# Matches explicit specialist-agent requests, e.g. "brug email-agent",
+# "brug support agent", "use dev-agent" — the only case that skips the
+# personal assistant and routes straight to a specialist.
+_EXPLICIT_AGENT_RE = re.compile(
+    r"\b(?:brug|bruge?r?|use)\s+([a-zæøå]+)[\s-]?agent", re.IGNORECASE
+)
+
+
+def detect_explicit_agent(message: str) -> Optional[str]:
+    """Detect an explicit 'brug X-agent' / 'use X-agent' request without an AI call."""
+    match = _EXPLICIT_AGENT_RE.search(message or "")
+    if not match:
+        return None
+    candidate = f"{match.group(1).lower()}-agent"
+    return candidate if candidate in AGENTS else None
+
+
+# Matches simple alarm requests in chat, e.g. "sæt alarm til 6:00",
+# "sæt en alarm til kl. 06:00", "væk mig kl 7", "wake me at 7:30" —
+# keyword matching only, no AI call.
+_ALARM_TRIGGER_RE = re.compile(
+    r"(?:sæt(?:te)?\s+(?:en\s+)?alarm|saet(?:te)?\s+(?:en\s+)?alarm|set\s+(?:an\s+)?alarm"
+    r"|væk\s+mig|vaek\s+mig|wake\s+me(?:\s+up)?)"
+    r"[^\d]{0,20}?(\d{1,2})(?:[:.](\d{2}))?",
+    re.IGNORECASE,
+)
+
+
+def detect_alarm_time(message: str) -> Optional[str]:
+    """Detect a 'set alarm to HH:MM' style request in a chat message."""
+    match = _ALARM_TRIGGER_RE.search(message or "")
+    if not match:
+        return None
+    hour = int(match.group(1))
+    minute = int(match.group(2) or 0)
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return f"{hour:02d}:{minute:02d}"
+
+
+def _row_to_alarm(row) -> dict:
+    return {
+        "id": row[0],
+        "time": row[1].strftime("%H:%M"),
+        "label": row[2],
+        "repeat": row[3],
+        "active": row[4],
+        "created_at": row[5].isoformat() if row[5] else None,
+    }
+
+
+def _validate_alarm_time(value: str) -> str:
+    if not re.fullmatch(r"([01]?\d|2[0-3]):[0-5]\d", (value or "").strip()):
+        raise HTTPException(400, "time skal være i formatet HH:MM, fx '06:00'")
+    hour, minute = value.strip().split(":")
+    return f"{int(hour):02d}:{int(minute):02d}"
+
+
+async def create_alarm(time_str: str, label: str = "Alarm", repeat: str = "daily") -> dict:
+    """Insert a new alarm. Shared by the /api/alarms endpoint and the chat integration."""
+    time_str = _validate_alarm_time(time_str)
+    async with async_session() as db:
+        result = await db.execute(
+            text("""
+                INSERT INTO alarms (time, label, repeat)
+                VALUES (:time, :label, :repeat)
+                RETURNING id, time, label, repeat, active, created_at
+            """),
+            {"time": time_str, "label": label, "repeat": repeat},
+        )
+        row = result.fetchone()
+        await db.commit()
+    return _row_to_alarm(row)
 
 
 # === HEALTH ===
@@ -200,25 +314,120 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    """Chat with an agent or the orchestrator."""
+    """Chat with an agent.
+
+    The personal assistant handles every message directly with a single AI
+    call (including automatic web search when needed). It only routes to a
+    specialist agent when the user explicitly asks for one (e.g. "brug
+    email-agent") — no separate classification call is made. A "set alarm to
+    HH:MM" request is caught first via keyword matching, with no AI call at all.
+    """
+    alarm_time = detect_alarm_time(req.message)
+    if alarm_time and not (req.agent_id and req.agent_id in AGENTS):
+        alarm = await create_alarm(alarm_time)
+        await audit.log_action(
+            "personal-assistant", "alarm_created_via_chat", {"time": alarm_time}
+        )
+        return {
+            "response": f"Alarm sat til kl. {alarm_time} ⏰ (gentages dagligt)",
+            "agent": "personal-assistant",
+            "alarm": alarm,
+        }
+
     if req.agent_id and req.agent_id in AGENTS:
-        agent = get_agent(req.agent_id)
-        response = await agent.quick_think(req.message)
+        agent_id = req.agent_id
     else:
-        # Orchestrator decides which agent to use
-        routing = await ai.extract_json(f"""
-Given this user message, determine which agent should handle it:
-Message: {req.message}
+        agent_id = detect_explicit_agent(req.message) or "personal-assistant"
 
-Available agents: {list(AGENTS.keys())}
+    agent = get_agent(agent_id)
+    # Only the personal assistant gets live web search — specialist agents
+    # work off the DB/integrations they already have.
+    tools = [WEB_SEARCH_TOOL] if agent_id == "personal-assistant" else None
+    response = await agent.quick_think(req.message, tools=tools)
 
-Return JSON: {{"agent_id": "agent-id", "task_type": "type", "reasoning": "why"}}
-""")
-        agent_id = routing.get("agent_id", "personal-assistant")
-        agent = get_agent(agent_id)
-        response = await agent.quick_think(req.message)
+    return {"response": response, "agent": agent_id}
 
-    return {"response": response, "agent": req.agent_id or "orchestrator"}
+
+# === WEB SEARCH ===
+@app.get("/api/search")
+async def web_search(q: str):
+    """Search the web via Claude (server-side web search tool) and return an answer."""
+    if not q or not q.strip():
+        raise HTTPException(400, "Query parameter 'q' is required")
+    answer = await ai.web_search_answer(q)
+    return {"query": q, "answer": answer}
+
+
+# === ALARMS ===
+class AlarmRequest(BaseModel):
+    time: str  # "HH:MM"
+    label: str = "Alarm"
+    repeat: str = "daily"  # "daily" stays active after triggering; "once" deactivates itself
+
+
+@app.post("/api/alarms")
+async def create_alarm_endpoint(req: AlarmRequest):
+    """Create a new alarm."""
+    alarm = await create_alarm(req.time, req.label, req.repeat)
+    await audit.log_action("system", "alarm_created", {"time": alarm["time"], "label": alarm["label"]})
+    return alarm
+
+
+@app.get("/api/alarms")
+async def list_alarms():
+    """Get all active alarms."""
+    async with async_session() as db:
+        result = await db.execute(
+            text("""
+                SELECT id, time, label, repeat, active, created_at
+                FROM alarms WHERE active = true ORDER BY time
+            """)
+        )
+        rows = result.fetchall()
+    return [_row_to_alarm(r) for r in rows]
+
+
+@app.delete("/api/alarms/{alarm_id}")
+async def delete_alarm(alarm_id: int):
+    """Delete an alarm."""
+    async with async_session() as db:
+        result = await db.execute(
+            text("DELETE FROM alarms WHERE id = :id RETURNING id"), {"id": alarm_id}
+        )
+        deleted = result.fetchone()
+        await db.commit()
+    if not deleted:
+        raise HTTPException(404, "Alarm not found")
+    return {"deleted": True, "id": alarm_id}
+
+
+@app.get("/api/alarms/check")
+async def check_alarms():
+    """Check whether any active alarm matches the current time (±1 minute)."""
+    now = datetime.now(LOCAL_TZ)
+    now_minutes = now.hour * 60 + now.minute
+
+    async with async_session() as db:
+        result = await db.execute(
+            text("SELECT id, time, label, repeat, active, created_at FROM alarms WHERE active = true")
+        )
+        rows = result.fetchall()
+
+    for row in rows:
+        alarm_minutes = row[1].hour * 60 + row[1].minute
+        diff = min(abs(alarm_minutes - now_minutes), 1440 - abs(alarm_minutes - now_minutes))
+        if diff <= 1:
+            alarm = _row_to_alarm(row)
+            if row[3] == "once":
+                # One-off alarms deactivate themselves once triggered.
+                async with async_session() as db:
+                    await db.execute(
+                        text("UPDATE alarms SET active = false WHERE id = :id"), {"id": row[0]}
+                    )
+                    await db.commit()
+            return {"triggered": True, "alarm": alarm}
+
+    return {"triggered": False, "alarm": None}
 
 
 # === WEBHOOKS ===

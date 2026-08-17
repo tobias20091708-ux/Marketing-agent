@@ -1,371 +1,1319 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="da">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Operations Platform</title>
+<title>AI Platform</title>
 <style>
-* { margin: 0; padding: 0; box-sizing: border-box; }
 :root {
-    --bg: #0a0a0f; --surface: #12121a; --surface2: #1a1a2e; --border: #2a2a3e;
-    --text: #e4e4ef; --text2: #8888a0; --accent: #7c6cf0; --accent2: #5b4dd4;
-    --green: #34d399; --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa;
+  --bg: #f2e9db;
+  --bg-elevated: #faf5ec;
+  --surface: #fffdf9;
+  --surface-2: #fbf1e2;
+  --border: #e7d7bd;
+  --border-soft: #eee0c9;
+  --text: #2e2417;
+  --text-dim: #7c6c58;
+  --text-faint: #a4937b;
+  --accent: #e0642f;
+  --accent-2: #f2934f;
+  --accent-end: #f4a35f;
+  --accent-soft: rgba(224, 100, 47, 0.13);
+  --green: #5f9e6f;
+  --yellow: #d99a35;
+  --red: #d3543a;
+  --blue: #6f93a8;
+  --radius: 18px;
+  --radius-sm: 12px;
+  --shadow: 0 24px 48px -22px rgba(120, 80, 40, 0.32), 0 2px 8px -2px rgba(120, 80, 40, 0.1);
+  --shadow-sm: 0 1px 2px rgba(120, 80, 40, 0.08), 0 6px 14px -8px rgba(120, 80, 40, 0.18);
+  --shadow-inset: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  --shadow-raised: var(--shadow-sm), var(--shadow-inset);
+  --shadow-pressed: inset 0 2px 5px rgba(120, 80, 40, 0.18);
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
 }
-body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
-.layout { display: grid; grid-template-columns: 240px 1fr; min-height: 100vh; }
 
-/* Sidebar */
-.sidebar { background: var(--surface); border-right: 1px solid var(--border); padding: 24px 0; display: flex; flex-direction: column; }
-.logo { padding: 0 24px 24px; font-size: 18px; font-weight: 600; color: var(--accent); border-bottom: 1px solid var(--border); }
-.logo span { color: var(--text2); font-weight: 400; font-size: 12px; display: block; margin-top: 4px; }
-.nav { padding: 16px 12px; flex: 1; }
-.nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; cursor: pointer; color: var(--text2); transition: all 0.15s; margin-bottom: 2px; font-size: 14px; }
-.nav-item:hover, .nav-item.active { background: var(--surface2); color: var(--text); }
-.nav-item.active { border-left: 3px solid var(--accent); }
-.nav-dot { width: 8px; height: 8px; border-radius: 50%; }
-.nav-dot.online { background: var(--green); }
-.nav-dot.idle { background: var(--yellow); }
-.nav-dot.error { background: var(--red); }
-.sidebar-footer { padding: 16px 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text2); }
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-/* Main content */
-.main { padding: 24px 32px; overflow-y: auto; }
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; }
-.header h1 { font-size: 24px; font-weight: 600; }
-.header-actions { display: flex; gap: 12px; }
-.btn { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer; font-size: 13px; transition: all 0.15s; }
-.btn:hover { border-color: var(--accent); }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn-primary:hover { background: var(--accent2); }
+html, body {
+  height: 100%;
+}
 
-/* Metric cards */
-.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px; }
-.metric-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
-.metric-label { font-size: 12px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-.metric-value { font-size: 28px; font-weight: 700; }
-.metric-change { font-size: 12px; margin-top: 4px; }
-.metric-change.up { color: var(--green); }
-.metric-change.down { color: var(--red); }
+body {
+  font-family: var(--font);
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(244, 163, 95, 0.22), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(224, 100, 47, 0.10), transparent 55%),
+    var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow: hidden;
+}
 
-/* Agent cards */
-.agents-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-bottom: 24px; }
-.agent-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
-.agent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.agent-name { font-size: 16px; font-weight: 600; }
-.agent-status { padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 500; }
-.agent-status.idle { background: rgba(52,211,153,0.15); color: var(--green); }
-.agent-status.processing { background: rgba(96,165,250,0.15); color: var(--blue); }
-.agent-status.error { background: rgba(248,113,113,0.15); color: var(--red); }
-.agent-stats { display: flex; gap: 16px; margin-top: 12px; }
-.agent-stat { font-size: 12px; color: var(--text2); }
-.agent-stat strong { color: var(--text); font-size: 16px; display: block; }
+::selection { background: var(--accent); color: #fff; }
 
-/* Activity feed */
-.section-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
-.feed { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.feed-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--border); }
-.feed-item:last-child { border-bottom: none; }
-.feed-icon { width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
-.feed-icon.email { background: rgba(124,108,240,0.15); color: var(--accent); }
-.feed-icon.finance { background: rgba(251,191,36,0.15); color: var(--yellow); }
-.feed-icon.support { background: rgba(248,113,113,0.15); color: var(--red); }
-.feed-icon.sales { background: rgba(52,211,153,0.15); color: var(--green); }
-.feed-icon.dev { background: rgba(96,165,250,0.15); color: var(--blue); }
-.feed-text { flex: 1; }
-.feed-text strong { font-size: 13px; }
-.feed-text p { font-size: 12px; color: var(--text2); margin-top: 2px; }
-.feed-time { font-size: 11px; color: var(--text2); white-space: nowrap; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
 
-/* Chat panel */
-.chat-section { margin-top: 24px; }
-.chat-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.chat-messages { height: 300px; overflow-y: auto; padding: 16px; }
-.chat-msg { margin-bottom: 12px; }
-.chat-msg.user { text-align: right; }
-.chat-msg .bubble { display: inline-block; padding: 8px 14px; border-radius: 12px; max-width: 80%; font-size: 14px; }
-.chat-msg.user .bubble { background: var(--accent); color: #fff; }
-.chat-msg.ai .bubble { background: var(--surface2); }
-.chat-input { display: flex; border-top: 1px solid var(--border); }
-.chat-input input { flex: 1; padding: 14px 16px; background: transparent; border: none; color: var(--text); font-size: 14px; outline: none; }
-.chat-input button { padding: 14px 20px; background: var(--accent); border: none; color: #fff; cursor: pointer; font-size: 14px; }
+button { font-family: inherit; }
 
-/* Responsive */
-@media (max-width: 768px) {
-    .layout { grid-template-columns: 1fr; }
-    .sidebar { display: none; }
-    .metrics { grid-template-columns: repeat(2, 1fr); }
+/* ============ APP LAYOUT ============ */
+.app {
+  display: grid;
+  grid-template-columns: 264px 1fr;
+  height: 100vh;
+}
+
+/* ============ SIDEBAR ============ */
+.sidebar {
+  background: linear-gradient(180deg, var(--bg-elevated), #f5ecdd);
+  border-right: 1px solid var(--border-soft);
+  box-shadow: 4px 0 24px -18px rgba(120, 80, 40, 0.4);
+  display: flex;
+  flex-direction: column;
+  padding: 22px 16px;
+  gap: 24px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px;
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 11px;
+  background: linear-gradient(150deg, var(--accent-2), var(--accent));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+  box-shadow: 0 8px 20px -8px rgba(224, 100, 47, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.12);
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+
+.brand-text strong { font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+.brand-text span { font-size: 11.5px; color: var(--text-faint); }
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.nav-btn {
+  all: unset;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  color: var(--text-dim);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: background .16s ease, color .16s ease, transform .16s ease;
+  position: relative;
+}
+
+.nav-btn:hover { background: var(--surface); color: var(--text); box-shadow: var(--shadow-raised); }
+.nav-btn:active { transform: scale(0.98); box-shadow: var(--shadow-pressed); }
+
+.nav-btn.active {
+  background: linear-gradient(135deg, var(--accent-soft), rgba(242, 147, 79, 0.06));
+  color: var(--accent);
+  box-shadow: var(--shadow-raised);
+  font-weight: 620;
+}
+
+.nav-btn .ic {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.nav-badge {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--text-faint);
+  background: var(--surface-2);
+  padding: 1px 7px;
+  border-radius: 20px;
+}
+
+.sidebar-spacer { flex: 1; }
+
+.sidebar-status {
+  border-top: 1px solid var(--border-soft);
+  padding-top: 14px;
+  font-size: 11.5px;
+  color: var(--text-faint);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.status-row { display: flex; align-items: center; gap: 8px; }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px rgba(95, 158, 111, 0.18); flex-shrink: 0; }
+
+/* ============ MAIN CONTENT ============ */
+.content { position: relative; overflow: hidden; }
+
+.page {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  animation: fadeIn .28s ease;
+}
+
+.page.active { display: flex; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---- Chat page ---- */
+.chat-header {
+  padding: 20px 32px 16px;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.chat-header h1 { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+.chat-header p { font-size: 12.5px; color: var(--text-faint); margin-top: 2px; }
+
+.chat-header-actions { display: flex; gap: 8px; }
+
+.icon-btn {
+  all: unset;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  font-size: 14px;
+  transition: all .15s ease;
+}
+.icon-btn { background: var(--surface); box-shadow: var(--shadow-raised); }
+.icon-btn:hover { background: var(--surface); color: var(--text); border-color: var(--text-faint); transform: translateY(-1px); }
+.icon-btn:active { box-shadow: var(--shadow-pressed); transform: none; }
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px 0 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.messages-inner {
+  width: 100%;
+  max-width: 760px;
+  padding: 0 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.msg { display: flex; gap: 12px; max-width: 100%; animation: msgIn .32s cubic-bezier(.2,.8,.2,1); }
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(10px) scale(.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.msg.user { flex-direction: row-reverse; margin-left: auto; }
+
+.msg-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  margin-top: 2px;
+}
+.msg.assistant .msg-avatar { background: linear-gradient(150deg, var(--accent-2), var(--accent)); color: #fff; box-shadow: 0 6px 14px -6px rgba(224, 100, 47, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+.msg.user .msg-avatar { background: var(--surface-2); border: 1px solid var(--border); box-shadow: var(--shadow-inset); }
+
+.msg-body { display: flex; flex-direction: column; gap: 5px; max-width: 78%; }
+.msg.user .msg-body { align-items: flex-end; }
+
+.msg-meta { font-size: 11px; color: var(--text-faint); padding: 0 2px; display: flex; gap: 6px; align-items: center; }
+.agent-tag {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 20px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  letter-spacing: .01em;
+}
+
+.bubble {
+  padding: 11px 15px;
+  border-radius: 14px;
+  font-size: 14.25px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.msg.assistant .bubble {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-top-left-radius: 4px;
+  box-shadow: var(--shadow-raised);
+}
+
+.msg.user .bubble {
+  background: linear-gradient(150deg, var(--accent-2), var(--accent));
+  color: #fff;
+  border-top-right-radius: 4px;
+  box-shadow: 0 8px 18px -10px rgba(224, 100, 47, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+
+.msg.error .bubble {
+  background: rgba(211, 84, 58, 0.08);
+  border: 1px solid rgba(211, 84, 58, 0.28);
+  color: #a5391f;
+}
+
+.typing-dots { display: inline-flex; gap: 4px; align-items: center; padding: 4px 2px; }
+.typing-dots span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-faint);
+  animation: bounce 1.3s infinite ease-in-out;
+}
+.typing-dots span:nth-child(2) { animation-delay: .15s; }
+.typing-dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: .5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.empty-state {
+  margin: auto;
+  text-align: center;
+  color: var(--text-faint);
+  max-width: 420px;
+  padding: 32px;
+}
+.empty-state .glyph {
+  width: 56px; height: 56px; border-radius: 16px;
+  background: linear-gradient(150deg, var(--accent-2), var(--accent));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 24px; margin: 0 auto 16px;
+  box-shadow: 0 12px 30px -10px rgba(224, 100, 47, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.empty-state h2 { color: var(--text); font-size: 16px; font-weight: 650; margin-bottom: 6px; }
+.empty-state p { font-size: 13px; line-height: 1.6; }
+
+.suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 18px; }
+.suggestion-chip {
+  all: unset;
+  cursor: pointer;
+  font-size: 12.5px;
+  padding: 8px 13px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  transition: all .15s ease;
+}
+.suggestion-chip { background: var(--surface); box-shadow: var(--shadow-raised); }
+.suggestion-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); transform: translateY(-1px); }
+
+.composer-wrap {
+  padding: 16px 32px 22px;
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.composer {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 8px 8px 8px 16px;
+  box-shadow: var(--shadow-raised);
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.composer:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-raised);
+}
+
+.composer textarea {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  resize: none;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  max-height: 160px;
+  padding: 8px 0;
+}
+.composer textarea::placeholder { color: var(--text-faint); }
+
+.send-btn {
+  all: unset;
+  cursor: pointer;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(150deg, var(--accent-2), var(--accent));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  flex-shrink: 0;
+  box-shadow: 0 8px 16px -8px rgba(224, 100, 47, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease;
+}
+.send-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 22px -8px rgba(224, 100, 47, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.3); }
+.send-btn:active { transform: scale(.94); box-shadow: var(--shadow-pressed); }
+.send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+
+/* ---- Agents page ---- */
+.page-scroll { flex: 1; overflow-y: auto; }
+.page-inner { max-width: 1040px; margin: 0 auto; padding: 32px; }
+
+.page-title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 22px; }
+.page-title-row h1 { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+.page-title-row p { font-size: 13px; color: var(--text-faint); margin-top: 3px; }
+
+.btn {
+  all: unset;
+  cursor: pointer;
+  font-size: 12.5px;
+  font-weight: 550;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all .15s ease;
+}
+.btn:hover { border-color: var(--text-faint); color: var(--text); transform: translateY(-1px); }
+.btn:active { box-shadow: var(--shadow-pressed); transform: none; }
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 18px;
+  box-shadow: var(--shadow-raised);
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  cursor: pointer;
+  animation: msgIn .35s cubic-bezier(.2,.8,.2,1) backwards;
+}
+.agent-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(224, 100, 47, 0.4);
+  box-shadow: var(--shadow);
+}
+
+.agent-card-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 12px; }
+.agent-icon {
+  width: 38px; height: 38px; border-radius: 11px;
+  background: linear-gradient(150deg, var(--surface), var(--surface-2));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 17px; flex-shrink: 0;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-inset);
+}
+.agent-card-title { flex: 1; min-width: 0; }
+.agent-card-title h3 { font-size: 14.5px; font-weight: 600; margin-bottom: 2px; }
+.agent-card-title span { font-size: 11.5px; color: var(--text-faint); }
+
+.agent-desc { font-size: 12.5px; color: var(--text-dim); line-height: 1.55; margin-bottom: 14px; min-height: 38px; }
+
+.agent-card-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--border-soft); }
+
+.status-pill {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-transform: capitalize;
+}
+.status-pill .dot { box-shadow: none; }
+.status-pill.idle { background: rgba(95, 158, 111, 0.14); color: var(--green); }
+.status-pill.processing { background: rgba(111, 147, 168, 0.14); color: var(--blue); }
+.status-pill.error { background: rgba(211, 84, 58, 0.14); color: var(--red); }
+.status-pill.pending { background: rgba(217, 154, 53, 0.14); color: var(--yellow); }
+.status-pill.unknown { background: var(--surface-2); color: var(--text-faint); }
+
+.agent-lastrun { font-size: 11px; color: var(--text-faint); }
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 37%, var(--surface) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: var(--radius);
+  height: 148px;
+}
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+
+/* ---- Settings page ---- */
+.settings-section {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-raised);
+}
+.settings-section h2 { font-size: 14px; font-weight: 620; margin-bottom: 4px; }
+.settings-section .hint { font-size: 12px; color: var(--text-faint); margin-bottom: 16px; }
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-top: 1px solid var(--border-soft);
+  gap: 16px;
+}
+.settings-row:first-of-type { border-top: none; padding-top: 0; }
+.settings-row-label { font-size: 13px; font-weight: 500; }
+.settings-row-desc { font-size: 11.5px; color: var(--text-faint); margin-top: 2px; }
+
+.field {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text);
+  min-width: 220px;
+  box-shadow: var(--shadow-pressed);
+}
+.field:focus { outline: none; border-color: var(--accent); }
+
+.toggle {
+  width: 40px; height: 23px; border-radius: 20px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-pressed);
+  transition: background .2s ease;
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  width: 17px; height: 17px; border-radius: 50%;
+  background: var(--text-faint);
+  box-shadow: 0 1px 3px rgba(120, 80, 40, 0.3);
+  top: 2px; left: 2px;
+  transition: transform .2s ease, background .2s ease;
+}
+.toggle.on { background: var(--accent-soft); border-color: var(--accent); }
+.toggle.on::after { transform: translateX(17px); background: var(--accent); }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+.stat-box { background: linear-gradient(150deg, var(--surface), var(--surface-2)); border-radius: 12px; padding: 14px 16px; border: 1px solid var(--border-soft); box-shadow: var(--shadow-raised); }
+.stat-box .val { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+.stat-box .lbl { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+
+/* ---- Mobile / responsive ---- */
+.mobile-topbar { display: none; }
+
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; }
+  .sidebar { display: none; }
+
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--bg-elevated);
+    flex-shrink: 0;
+  }
+  .content { display: flex; flex-direction: column; }
+  .page { position: static; height: 100%; }
+
+  .bottom-nav {
+    display: flex;
+    border-top: 1px solid var(--border-soft);
+    background: var(--bg-elevated);
+    flex-shrink: 0;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  }
+  .bottom-nav .nav-btn {
+    flex: 1;
+    flex-direction: column;
+    gap: 3px;
+    align-items: center;
+    font-size: 10.5px;
+    padding: 8px 4px;
+    text-align: center;
+  }
+  .bottom-nav .nav-btn .ic { font-size: 17px; }
+  .bottom-nav .nav-badge { display: none; }
+
+  .chat-header { padding: 14px 18px; }
+  .messages-inner, .composer-wrap { padding-left: 16px; padding-right: 16px; }
+  .composer-wrap { padding-top: 12px; padding-bottom: 12px; }
+  .page-inner { padding: 20px 16px; }
+  .msg-body { max-width: 88%; }
+  .agent-grid { grid-template-columns: 1fr; }
+}
+
+@media (min-width: 861px) {
+  .app-wrapper-mobile-nav { display: none; }
+}
+
+/* ============ MORGEN-MODE ============ */
+#morning-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 40px;
+  text-align: center;
+  background:
+    radial-gradient(1100px 700px at 50% -10%, rgba(255, 200, 140, 0.28), transparent 60%),
+    radial-gradient(900px 600px at 90% 100%, rgba(224, 100, 47, 0.22), transparent 55%),
+    linear-gradient(160deg, #2a1810 0%, #3a2216 45%, #45281a 100%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 1.8s ease;
+}
+#morning-mode.visible { opacity: 1; pointer-events: auto; }
+#morning-mode.fading-out { opacity: 0; transition: opacity 1.2s ease; }
+
+.morning-clock {
+  font-size: clamp(48px, 12vw, 108px);
+  font-weight: 200;
+  letter-spacing: -0.02em;
+  color: #fff5e8;
+  text-shadow: 0 0 60px rgba(255, 190, 120, 0.35);
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  animation: morningRise 1.4s ease .3s forwards;
+}
+
+.morning-date {
+  font-size: 14px;
+  color: rgba(255, 245, 232, 0.65);
+  text-transform: capitalize;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  animation: morningRise 1.4s ease .5s forwards;
+}
+
+.morning-weather {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  color: rgba(255, 245, 232, 0.8);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 8px 18px;
+  border-radius: 30px;
+  opacity: 0;
+  animation: morningRise 1.4s ease .7s forwards;
+}
+.morning-weather .icon { font-size: 20px; }
+
+.morning-verse {
+  max-width: 640px;
+  opacity: 0;
+  animation: morningRise 1.6s ease 1s forwards;
+}
+.morning-verse p {
+  font-size: clamp(19px, 3vw, 27px);
+  line-height: 1.6;
+  color: #fff5e8;
+  font-style: italic;
+  font-weight: 300;
+}
+.morning-verse span {
+  display: block;
+  margin-top: 14px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 245, 232, 0.55);
+  font-style: normal;
+}
+
+.morning-hint {
+  position: absolute;
+  bottom: 28px;
+  font-size: 12px;
+  color: rgba(255, 245, 232, 0.4);
+  opacity: 0;
+  animation: morningRise 1.4s ease 1.3s forwards;
+}
+
+@keyframes morningRise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 600px) {
+  #morning-mode { gap: 20px; padding: 24px; }
 }
 </style>
 </head>
 <body>
-<div class="layout">
-    <aside class="sidebar">
-        <div class="logo">AI Platform<span>Operations Center</span></div>
-        <nav class="nav">
-            <div class="nav-item active" onclick="showSection('overview')">
-                <span>&#9632;</span> Overview
-            </div>
-            <div class="nav-item" onclick="showSection('agents')">
-                <span>&#9654;</span> Agents
-            </div>
-            <div class="nav-item" onclick="showSection('email')">
-                <span class="nav-dot online"></span> Email Agent
-            </div>
-            <div class="nav-item" onclick="showSection('finance')">
-                <span class="nav-dot online"></span> Finance Agent
-            </div>
-            <div class="nav-item" onclick="showSection('marketing')">
-                <span class="nav-dot idle"></span> Marketing Agent
-            </div>
-            <div class="nav-item" onclick="showSection('sales')">
-                <span class="nav-dot online"></span> Sales Agent
-            </div>
-            <div class="nav-item" onclick="showSection('support')">
-                <span class="nav-dot online"></span> Support Agent
-            </div>
-            <div class="nav-item" onclick="showSection('dev')">
-                <span class="nav-dot online"></span> Dev Agent
-            </div>
-            <div class="nav-item" onclick="showSection('chat')">
-                <span>&#128172;</span> Chat
-            </div>
-            <div class="nav-item" onclick="showSection('audit')">
-                <span>&#128203;</span> Audit Log
-            </div>
-        </nav>
-        <div class="sidebar-footer">
-            <div id="ai-cost">API cost today: loading...</div>
-            <div id="uptime">Uptime: calculating...</div>
-        </div>
-    </aside>
 
-    <main class="main">
-        <div class="header">
-            <h1 id="page-title">Overview</h1>
-            <div class="header-actions">
-                <button class="btn" onclick="refreshData()">Refresh</button>
-                <button class="btn btn-primary" onclick="showSection('chat')">Chat with AI</button>
-            </div>
-        </div>
-
-        <!-- Metrics -->
-        <div class="metrics" id="metrics">
-            <div class="metric-card">
-                <div class="metric-label">Tasks (24h)</div>
-                <div class="metric-value" id="m-tasks">-</div>
-                <div class="metric-change up" id="m-tasks-change"></div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">Emails processed</div>
-                <div class="metric-value" id="m-emails">-</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">Open tickets</div>
-                <div class="metric-value" id="m-tickets">-</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">Revenue (MTD)</div>
-                <div class="metric-value" id="m-revenue">-</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">Pipeline leads</div>
-                <div class="metric-value" id="m-leads">-</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-label">AI tokens used</div>
-                <div class="metric-value" id="m-tokens">-</div>
-            </div>
-        </div>
-
-        <!-- Agent cards -->
-        <div class="section-title">Agents</div>
-        <div class="agents-grid" id="agents-grid"></div>
-
-        <!-- Activity feed -->
-        <div class="section-title">Recent activity</div>
-        <div class="feed" id="activity-feed">
-            <div class="feed-item">
-                <div class="feed-icon email">&#9993;</div>
-                <div class="feed-text"><strong>Loading activity...</strong><p>Connecting to platform</p></div>
-                <div class="feed-time">now</div>
-            </div>
-        </div>
-
-        <!-- Chat section (hidden by default) -->
-        <div class="chat-section" id="chat-section" style="display:none;">
-            <div class="chat-box">
-                <div class="chat-messages" id="chat-messages">
-                    <div class="chat-msg ai"><div class="bubble">Hello! I'm the AI Operations Platform. Ask me anything or give me a task.</div></div>
-                </div>
-                <div class="chat-input">
-                    <input type="text" id="chat-input" placeholder="Ask the AI anything..." onkeydown="if(event.key==='Enter')sendChat()">
-                    <button onclick="sendChat()">Send</button>
-                </div>
-            </div>
-        </div>
-    </main>
+<!-- ============ MORGEN-MODE (?morning=true) ============ -->
+<div id="morning-mode">
+  <div class="morning-clock" id="morning-clock">--:--</div>
+  <div class="morning-date" id="morning-date"></div>
+  <div class="morning-weather" id="morning-weather">
+    <span class="icon">&#9925;</span><span>Henter vejr...</span>
+  </div>
+  <div class="morning-verse" id="morning-verse">
+    <p id="morning-verse-text">Henter et vers...</p>
+    <span id="morning-verse-ref"></span>
+  </div>
+  <div class="morning-hint">Skifter til chat om lidt...</div>
+  <audio id="morning-audio" loop preload="auto"
+    src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
 </div>
 
-<script>
-const API = '';  // Same origin
+<div class="app" id="app">
+  <!-- ============ SIDEBAR (desktop) ============ -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">AI</div>
+      <div class="brand-text">
+        <strong>AI Platform</strong>
+        <span>Operations Center</span>
+      </div>
+    </div>
 
-async function fetchJSON(url) {
-    try {
-        const r = await fetch(API + url);
-        return await r.json();
-    } catch(e) {
-        console.error('Fetch error:', e);
-        return null;
-    }
-}
+    <nav class="nav" id="nav-desktop">
+      <button class="nav-btn active" data-page="chat">
+        <span class="ic">&#128172;</span> Chat
+      </button>
+      <button class="nav-btn" data-page="agents">
+        <span class="ic">&#129302;</span> Agenter
+        <span class="nav-badge" id="agent-count-badge">7</span>
+      </button>
+      <button class="nav-btn" data-page="settings">
+        <span class="ic">&#9881;&#65039;</span> Indstillinger
+      </button>
+    </nav>
 
-async function refreshData() {
-    // Overview metrics
-    const overview = await fetchJSON('/api/dashboard/overview');
-    if (overview) {
-        const tasks24h = overview.tasks_24h || {};
-        const totalTasks = Object.values(tasks24h).reduce((a,b) => a+b, 0);
-        document.getElementById('m-tasks').textContent = totalTasks;
+    <div class="sidebar-spacer"></div>
 
-        const emails24h = overview.emails_24h || {};
-        const totalEmails = Object.values(emails24h).reduce((a,b) => a+b, 0);
-        document.getElementById('m-emails').textContent = totalEmails;
+    <div class="sidebar-status">
+      <div class="status-row"><span class="dot"></span> Forbundet til API</div>
+      <div id="sidebar-cost">Token-forbrug: —</div>
+    </div>
+  </aside>
 
-        const tickets = overview.tickets || {};
-        document.getElementById('m-tickets').textContent = tickets.open || 0;
+  <!-- ============ MAIN CONTENT ============ -->
+  <main class="content">
+    <!-- Mobile top bar -->
+    <div class="mobile-topbar">
+      <div class="brand-mark" style="width:28px;height:28px;font-size:13px;">AI</div>
+      <strong id="mobile-title" style="font-size:14.5px;">Chat</strong>
+    </div>
 
-        const rev = overview.month_revenue || 0;
-        document.getElementById('m-revenue').textContent = new Intl.NumberFormat('da-DK', {
-            style: 'currency', currency: 'DKK', maximumFractionDigits: 0
-        }).format(rev);
+    <!-- ===== CHAT PAGE ===== -->
+    <section class="page active" id="page-chat">
+      <div class="chat-header">
+        <div>
+          <h1>Chat</h1>
+          <p>Din personlige assistent — svarer direkte, søger automatisk på nettet ved behov</p>
+        </div>
+        <div class="chat-header-actions">
+          <button class="icon-btn" id="clear-chat" title="Ryd samtale">&#128465;&#65039;</button>
+        </div>
+      </div>
 
-        const pipeline = overview.pipeline || {};
-        const leads = Object.values(pipeline).reduce((a,b) => a+b, 0);
-        document.getElementById('m-leads').textContent = leads;
-
-        const aiStats = overview.ai_stats || {};
-        const tokens = (aiStats.total_input_tokens || 0) + (aiStats.total_output_tokens || 0);
-        document.getElementById('m-tokens').textContent = tokens > 1000 ? (tokens/1000).toFixed(1) + 'k' : tokens;
-        document.getElementById('ai-cost').textContent = `API cost: $${(aiStats.estimated_cost_usd || 0).toFixed(2)}`;
-    }
-
-    // Agents
-    const agents = await fetchJSON('/api/agents');
-    if (agents) {
-        const grid = document.getElementById('agents-grid');
-        grid.innerHTML = agents.map(a => `
-            <div class="agent-card">
-                <div class="agent-header">
-                    <div class="agent-name">${a.name}</div>
-                    <div class="agent-status ${a.status}">${a.status}</div>
-                </div>
-                <div class="agent-stats">
-                    <div class="agent-stat"><strong>${(a.stats?.tasks_completed || 0)}</strong>completed</div>
-                    <div class="agent-stat"><strong>${(a.stats?.errors || 0)}</strong>errors</div>
-                    <div class="agent-stat"><strong>${a.last_run ? timeAgo(a.last_run) : 'never'}</strong>last run</div>
-                </div>
+      <div class="messages" id="messages">
+        <div class="messages-inner" id="messages-inner">
+          <div class="empty-state" id="empty-state">
+            <div class="glyph">&#128075;</div>
+            <h2>Hej! Hvad kan jeg hjælpe med?</h2>
+            <p>Spørg om hvad som helst — jeg svarer direkte og søger selv på nettet, hvis det kræver aktuel information. Skriv "brug email-agent" for at tale med en specialist-agent.</p>
+            <div class="suggestions">
+              <button class="suggestion-chip" data-fill="Hvad er de seneste nyheder om AI i dag?">Seneste AI-nyheder</button>
+              <button class="suggestion-chip" data-fill="Giv mig et overblik over hvad du kan hjælpe med">Hvad kan du?</button>
+              <button class="suggestion-chip" data-fill="Brug email-agent: opsummer min indbakke">Prøv en specialist-agent</button>
             </div>
-        `).join('');
+          </div>
+        </div>
+      </div>
 
-        // Update sidebar dots
-        agents.forEach(a => {
-            const dots = document.querySelectorAll('.nav-dot');
-            // Simple mapping
-        });
-    }
+      <div class="composer-wrap">
+        <form class="composer" id="composer">
+          <textarea id="chat-input" rows="1" placeholder="Skriv en besked..." autocomplete="off"></textarea>
+          <button type="submit" class="send-btn" id="send-btn" title="Send">&#10148;</button>
+        </form>
+      </div>
+    </section>
 
-    // Activity feed
-    const audit = await fetchJSON('/api/audit?limit=15');
-    if (audit && audit.length) {
-        const feed = document.getElementById('activity-feed');
-        const iconMap = {
-            'email-agent': { cls: 'email', icon: '&#9993;' },
-            'finance-agent': { cls: 'finance', icon: '&#128176;' },
-            'marketing-agent': { cls: 'sales', icon: '&#128200;' },
-            'sales-agent': { cls: 'sales', icon: '&#129309;' },
-            'support-agent': { cls: 'support', icon: '&#127919;' },
-            'dev-agent': { cls: 'dev', icon: '&#128187;' },
-        };
-        feed.innerHTML = audit.map(a => {
-            const ic = iconMap[a.agent] || { cls: 'email', icon: '&#9632;' };
-            return `
-                <div class="feed-item">
-                    <div class="feed-icon ${ic.cls}">${ic.icon}</div>
-                    <div class="feed-text">
-                        <strong>${a.agent || 'system'}</strong>
-                        <p>${a.action}${a.user_approved ? '' : ' (needs approval)'}</p>
-                    </div>
-                    <div class="feed-time">${a.time ? timeAgo(a.time) : ''}</div>
-                </div>
-            `;
-        }).join('');
-    }
-}
+    <!-- ===== AGENTS PAGE ===== -->
+    <section class="page" id="page-agents">
+      <div class="page-scroll">
+        <div class="page-inner">
+          <div class="page-title-row">
+            <div>
+              <h1>Agenter</h1>
+              <p>Status og aktivitet for alle agenter i platformen</p>
+            </div>
+            <button class="btn" id="refresh-agents">&#8635; Opdater</button>
+          </div>
+          <div class="agent-grid" id="agent-grid">
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+            <div class="skeleton"></div>
+          </div>
+        </div>
+      </div>
+    </section>
 
-function timeAgo(dateStr) {
-    const diff = (Date.now() - new Date(dateStr)) / 1000;
-    if (diff < 60) return Math.floor(diff) + 's ago';
-    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
-    if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
-    return Math.floor(diff/86400) + 'd ago';
-}
+    <!-- ===== SETTINGS PAGE ===== -->
+    <section class="page" id="page-settings">
+      <div class="page-scroll">
+        <div class="page-inner" style="max-width: 720px;">
+          <div class="page-title-row">
+            <div>
+              <h1>Indstillinger</h1>
+              <p>Tilpas dashboardet og se platformens status</p>
+            </div>
+          </div>
 
-function showSection(section) {
-    document.getElementById('page-title').textContent =
-        section.charAt(0).toUpperCase() + section.slice(1);
+          <div class="settings-section">
+            <h2>Forbindelse</h2>
+            <div class="hint">API-endpoint som dashboardet taler med</div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">API base-URL</div>
+                <div class="settings-row-desc">Samme origin som dette dashboard som standard</div>
+              </div>
+              <input class="field" id="api-base-input" placeholder="/" />
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">Test forbindelse</div>
+                <div class="settings-row-desc" id="conn-status">Ikke testet endnu</div>
+              </div>
+              <button class="btn" id="test-conn">Test</button>
+            </div>
+          </div>
 
-    // Toggle chat
-    document.getElementById('chat-section').style.display =
-        section === 'chat' ? 'block' : 'none';
+          <div class="settings-section">
+            <h2>Chat-adfærd</h2>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">Automatisk websøgning</div>
+                <div class="settings-row-desc">Assistenten søger selv på nettet ved aktuelle spørgsmål</div>
+              </div>
+              <div class="toggle on" id="toggle-search"></div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="settings-row-label">Lyd ved nyt svar</div>
+                <div class="settings-row-desc">Afspil en let lyd når assistenten svarer</div>
+              </div>
+              <div class="toggle" id="toggle-sound"></div>
+            </div>
+          </div>
 
-    // Update nav
-    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-    event.currentTarget?.classList.add('active');
-}
+          <div class="settings-section">
+            <h2>Platform-status</h2>
+            <div class="hint">Live nøgletal fra API'et</div>
+            <div class="stat-grid" id="settings-stats">
+              <div class="stat-box"><div class="val">—</div><div class="lbl">Tokens brugt</div></div>
+              <div class="stat-box"><div class="val">—</div><div class="lbl">Estimeret kostpris</div></div>
+              <div class="stat-box"><div class="val">7</div><div class="lbl">Agenter aktive</div></div>
+            </div>
+          </div>
 
-async function sendChat() {
-    const input = document.getElementById('chat-input');
-    const msg = input.value.trim();
-    if (!msg) return;
-    input.value = '';
+          <div class="settings-section">
+            <h2>Om</h2>
+            <div class="hint">AI Operations Platform — dashboard v2.0</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
 
-    const messages = document.getElementById('chat-messages');
-    messages.innerHTML += `<div class="chat-msg user"><div class="bubble">${escapeHtml(msg)}</div></div>`;
-    messages.scrollTop = messages.scrollHeight;
+<!-- Mobile bottom navigation -->
+<nav class="bottom-nav" id="nav-mobile">
+  <button class="nav-btn active" data-page="chat">
+    <span class="ic">&#128172;</span> Chat
+  </button>
+  <button class="nav-btn" data-page="agents">
+    <span class="ic">&#129302;</span> Agenter
+  </button>
+  <button class="nav-btn" data-page="settings">
+    <span class="ic">&#9881;&#65039;</span> Indstillinger
+  </button>
+</nav>
 
-    messages.innerHTML += `<div class="chat-msg ai"><div class="bubble" id="typing">Thinking...</div></div>`;
+<script>
+const API = (localStorage.getItem('ai_platform_api_base') || '').replace(/\/$/, '');
 
-    try {
-        const r = await fetch(API + '/api/chat', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ message: msg }),
-        });
-        const data = await r.json();
-        document.getElementById('typing').textContent = data.response;
-    } catch(e) {
-        document.getElementById('typing').textContent = 'Error: ' + e.message;
-    }
-    messages.scrollTop = messages.scrollHeight;
+const AGENT_META = {
+  'personal-assistant': { icon: '\u{1F642}', label: 'Personlig Assistent' },
+  'email-agent':        { icon: '✉️', label: 'Email-agent' },
+  'finance-agent':      { icon: '\u{1F4B0}', label: 'Finans-agent' },
+  'marketing-agent':    { icon: '\u{1F4C8}', label: 'Marketing-agent' },
+  'sales-agent':        { icon: '\u{1F91D}', label: 'Salgs-agent' },
+  'support-agent':      { icon: '\u{1F3A7}', label: 'Support-agent' },
+  'dev-agent':          { icon: '\u{1F4BB}', label: 'Dev-agent' },
+};
+
+const STATUS_LABEL = {
+  idle: 'Klar', processing: 'Arbejder', error: 'Fejl', pending: 'Afventer', unknown: 'Ukendt',
+};
+
+function agentMeta(id) {
+  return AGENT_META[id] || { icon: '\u{1F916}', label: id };
 }
 
 function escapeHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Initial load
-refreshData();
-// Auto-refresh every 30s
-setInterval(refreshData, 30000);
+async function fetchJSON(path, opts) {
+  const res = await fetch(API + path, opts);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
 
-// Uptime counter
-const startTime = Date.now();
-setInterval(() => {
-    const s = Math.floor((Date.now() - startTime) / 1000);
-    const h = Math.floor(s/3600);
-    const m = Math.floor((s%3600)/60);
-    document.getElementById('uptime').textContent = `Session: ${h}h ${m}m`;
-}, 10000);
+/* ============ NAVIGATION ============ */
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + name));
+  document.querySelectorAll('#nav-desktop .nav-btn, #nav-mobile .nav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.page === name);
+  });
+  const titles = { chat: 'Chat', agents: 'Agenter', settings: 'Indstillinger' };
+  document.getElementById('mobile-title').textContent = titles[name] || 'AI Platform';
+
+  if (name === 'agents') loadAgents();
+  if (name === 'settings') loadSettingsStats();
+}
+
+document.querySelectorAll('#nav-desktop .nav-btn, #nav-mobile .nav-btn').forEach(btn => {
+  btn.addEventListener('click', () => showPage(btn.dataset.page));
+});
+
+/* ============ CHAT ============ */
+const messagesInner = document.getElementById('messages-inner');
+const messagesBox = document.getElementById('messages');
+const emptyState = document.getElementById('empty-state');
+const chatInput = document.getElementById('chat-input');
+const composer = document.getElementById('composer');
+const sendBtn = document.getElementById('send-btn');
+
+let history = [];
+
+function scrollToBottom() {
+  requestAnimationFrame(() => { messagesBox.scrollTop = messagesBox.scrollHeight; });
+}
+
+function renderMessage({ role, text, agent, isError }) {
+  if (emptyState) emptyState.style.display = 'none';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + (role === 'user' ? 'user' : 'assistant') + (isError ? ' error' : '');
+
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  avatar.textContent = role === 'user' ? '\u{1F464}' : agentMeta(agent).icon;
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+
+  if (role === 'assistant') {
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    const tag = document.createElement('span');
+    tag.className = 'agent-tag';
+    tag.textContent = agentMeta(agent).label;
+    meta.appendChild(tag);
+    body.appendChild(meta);
+  }
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  body.appendChild(bubble);
+
+  wrap.appendChild(avatar);
+  wrap.appendChild(body);
+  messagesInner.appendChild(wrap);
+  scrollToBottom();
+  return bubble;
+}
+
+function renderTyping(agent) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg assistant';
+  wrap.id = 'typing-msg';
+
+  const avatar = document.createElement('div');
+  avatar.className = 'msg-avatar';
+  avatar.textContent = agentMeta(agent).icon;
+
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = '<span class="typing-dots"><span></span><span></span><span></span></span>';
+  body.appendChild(bubble);
+
+  wrap.appendChild(avatar);
+  wrap.appendChild(body);
+  messagesInner.appendChild(wrap);
+  scrollToBottom();
+}
+
+function removeTyping() {
+  const el = document.getElementById('typing-msg');
+  if (el) el.remove();
+}
+
+async function sendMessage(text) {
+  text = text.trim();
+  if (!text) return;
+
+  chatInput.value = '';
+  autoGrow();
+  sendBtn.disabled = true;
+
+  renderMessage({ role: 'user', text });
+  renderTyping('personal-assistant');
+
+  try {
+    const data = await fetchJSON('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text }),
+    });
+    removeTyping();
+    renderMessage({ role: 'assistant', text: data.response, agent: data.agent });
+  } catch (err) {
+    removeTyping();
+    renderMessage({ role: 'assistant', text: 'Kunne ikke få svar fra API\'et: ' + err.message, isError: true });
+  } finally {
+    sendBtn.disabled = false;
+    chatInput.focus();
+  }
+}
+
+composer.addEventListener('submit', (e) => {
+  e.preventDefault();
+  sendMessage(chatInput.value);
+});
+
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage(chatInput.value);
+  }
+});
+
+function autoGrow() {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 160) + 'px';
+}
+chatInput.addEventListener('input', autoGrow);
+
+document.querySelectorAll('.suggestion-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    chatInput.value = chip.dataset.fill;
+    sendMessage(chip.dataset.fill);
+  });
+});
+
+document.getElementById('clear-chat').addEventListener('click', () => {
+  messagesInner.querySelectorAll('.msg').forEach(m => m.remove());
+  if (emptyState) emptyState.style.display = '';
+});
+
+/* ============ AGENTS PAGE ============ */
+function statusClass(s) {
+  return ['idle', 'processing', 'error', 'pending'].includes(s) ? s : 'unknown';
+}
+
+function timeAgo(dateStr) {
+  if (!dateStr) return 'aldrig kørt';
+  const diff = (Date.now() - new Date(dateStr)) / 1000;
+  if (diff < 60) return Math.floor(diff) + 's siden';
+  if (diff < 3600) return Math.floor(diff / 60) + 'm siden';
+  if (diff < 86400) return Math.floor(diff / 3600) + 't siden';
+  return Math.floor(diff / 86400) + 'd siden';
+}
+
+async function loadAgents() {
+  const grid = document.getElementById('agent-grid');
+  try {
+    const agents = await fetchJSON('/api/agents');
+    document.getElementById('agent-count-badge').textContent = agents.length || 7;
+
+    if (!agents.length) {
+      grid.innerHTML = '<div class="agent-card">Ingen agenter fundet.</div>';
+      return;
+    }
+
+    grid.innerHTML = agents.map((a, i) => {
+      const meta = agentMeta(a.id);
+      const status = statusClass(a.status);
+      const completed = a.stats?.tasks_completed ?? 0;
+      const errors = a.stats?.errors ?? 0;
+      return `
+        <div class="agent-card" style="animation-delay:${i * 40}ms">
+          <div class="agent-card-top">
+            <div class="agent-icon">${meta.icon}</div>
+            <div class="agent-card-title">
+              <h3>${escapeHtml(a.name || meta.label)}</h3>
+              <span>${escapeHtml(a.type || a.id)}</span>
+            </div>
+          </div>
+          <div class="agent-desc">${completed} opgaver fuldført &middot; ${errors} fejl</div>
+          <div class="agent-card-footer">
+            <span class="status-pill ${status}"><span class="dot"></span>${STATUS_LABEL[status] || a.status || 'Ukendt'}</span>
+            <span class="agent-lastrun">${timeAgo(a.last_run)}</span>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    grid.querySelectorAll('.agent-card').forEach((card, i) => {
+      card.addEventListener('click', () => {
+        showPage('chat');
+        chatInput.value = `brug ${agents[i].id}: `;
+        chatInput.focus();
+      });
+    });
+  } catch (err) {
+    grid.innerHTML = `<div class="agent-card">Kunne ikke hente agenter: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+document.getElementById('refresh-agents').addEventListener('click', loadAgents);
+
+/* ============ SETTINGS PAGE ============ */
+const apiBaseInput = document.getElementById('api-base-input');
+apiBaseInput.value = API;
+apiBaseInput.addEventListener('change', () => {
+  localStorage.setItem('ai_platform_api_base', apiBaseInput.value.trim());
+  document.getElementById('conn-status').textContent = 'Gemt — genindlæs siden for at anvende';
+});
+
+document.getElementById('test-conn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('conn-status');
+  statusEl.textContent = 'Tester...';
+  try {
+    await fetchJSON('/health');
+    statusEl.textContent = '✅ Forbindelse OK';
+  } catch (err) {
+    statusEl.textContent = '❌ Kunne ikke forbinde: ' + err.message;
+  }
+});
+
+document.querySelectorAll('.toggle').forEach(t => {
+  t.addEventListener('click', () => t.classList.toggle('on'));
+});
+
+async function loadSettingsStats() {
+  try {
+    const overview = await fetchJSON('/api/dashboard/overview');
+    const ai = overview.ai_stats || {};
+    const tokens = (ai.total_input_tokens || 0) + (ai.total_output_tokens || 0);
+    const boxes = document.querySelectorAll('#settings-stats .stat-box .val');
+    if (boxes[0]) boxes[0].textContent = tokens > 1000 ? (tokens / 1000).toFixed(1) + 'k' : tokens;
+    if (boxes[1]) boxes[1].textContent = '$' + (ai.estimated_cost_usd || 0).toFixed(2);
+    document.getElementById('sidebar-cost').textContent = 'Token-forbrug: ' + (tokens > 1000 ? (tokens / 1000).toFixed(1) + 'k' : tokens);
+  } catch (err) {
+    // Silent — overview endpoint may be unavailable without a live DB.
+  }
+}
+
+/* ============ MORGEN-MODE (?morning=true) ============ */
+const WMO_WEATHER = {
+  0: { icon: '☀️', text: 'Klart vejr' },
+  1: { icon: '🌤️', text: 'Mest klart' },
+  2: { icon: '⛅', text: 'Delvist skyet' },
+  3: { icon: '☁️', text: 'Overskyet' },
+  45: { icon: '🌫️', text: 'Tåge' },
+  48: { icon: '🌫️', text: 'Rimtåge' },
+  51: { icon: '🌦️', text: 'Let støvregn' },
+  53: { icon: '🌦️', text: 'Støvregn' },
+  55: { icon: '🌧️', text: 'Tæt støvregn' },
+  61: { icon: '🌧️', text: 'Let regn' },
+  63: { icon: '🌧️', text: 'Regn' },
+  65: { icon: '🌧️', text: 'Kraftig regn' },
+  71: { icon: '🌨️', text: 'Let sne' },
+  73: { icon: '🌨️', text: 'Sne' },
+  75: { icon: '❄️', text: 'Kraftig sne' },
+  80: { icon: '🌦️', text: 'Byger' },
+  81: { icon: '🌧️', text: 'Kraftige byger' },
+  82: { icon: '⛈️', text: 'Voldsomme byger' },
+  95: { icon: '⛈️', text: 'Tordenvejr' },
+  96: { icon: '⛈️', text: 'Tordenvejr med hagl' },
+  99: { icon: '⛈️', text: 'Kraftigt tordenvejr' },
+};
+
+function isMorningMode() {
+  return new URLSearchParams(location.search).get('morning') === 'true';
+}
+
+function updateMorningClock() {
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  document.getElementById('morning-clock').textContent = `${hh}:${mm}`;
+  document.getElementById('morning-date').textContent = now.toLocaleDateString('da-DK', {
+    weekday: 'long', day: 'numeric', month: 'long',
+  });
+}
+
+async function loadMorningVerse() {
+  const textEl = document.getElementById('morning-verse-text');
+  const refEl = document.getElementById('morning-verse-ref');
+  try {
+    const res = await fetch('https://bible-api.com/?random=verse');
+    const data = await res.json();
+    textEl.textContent = `"${(data.text || '').trim().replace(/\s+/g, ' ')}"`;
+    refEl.textContent = data.reference || '';
+  } catch (err) {
+    textEl.textContent = '"Herren er min hyrde, mig skal intet fattes."';
+    refEl.textContent = 'Salme 23:1';
+  }
+}
+
+async function loadMorningWeather() {
+  const el = document.getElementById('morning-weather');
+  try {
+    const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=55.68&longitude=12.57&current_weather=true');
+    const data = await res.json();
+    const cw = data.current_weather;
+    const info = WMO_WEATHER[cw.weathercode] || { icon: '🌡️', text: 'Ukendt vejr' };
+    el.innerHTML = `<span class="icon">${info.icon}</span><span>${Math.round(cw.temperature)}°C · ${info.text} · København</span>`;
+  } catch (err) {
+    el.innerHTML = '<span class="icon">🌡️</span><span>Kunne ikke hente vejret</span>';
+  }
+}
+
+function playMorningAudio() {
+  const audio = document.getElementById('morning-audio');
+  audio.volume = 0.5;
+  const playPromise = audio.play();
+  if (playPromise && playPromise.catch) {
+    playPromise.catch(() => {
+      // Browsers block autoplay-with-sound without a user gesture. The
+      // Windows kiosk client launches Chrome with --autoplay-policy=
+      // no-user-gesture-required to work around this; this is a fallback
+      // for when the dashboard is opened normally in a browser.
+      const resume = () => { audio.play().catch(() => {}); document.removeEventListener('click', resume); };
+      document.addEventListener('click', resume, { once: true });
+    });
+  }
+}
+
+function stopMorningAudio() {
+  const audio = document.getElementById('morning-audio');
+  const fade = setInterval(() => {
+    if (audio.volume > 0.05) {
+      audio.volume = Math.max(0, audio.volume - 0.05);
+    } else {
+      clearInterval(fade);
+      audio.pause();
+    }
+  }, 80);
+}
+
+let morningClockInterval = null;
+
+function initMorningMode() {
+  const overlay = document.getElementById('morning-mode');
+  requestAnimationFrame(() => overlay.classList.add('visible'));
+
+  updateMorningClock();
+  morningClockInterval = setInterval(updateMorningClock, 1000);
+
+  loadMorningVerse();
+  loadMorningWeather();
+  playMorningAudio();
+
+  setTimeout(() => {
+    overlay.classList.add('fading-out');
+    stopMorningAudio();
+    clearInterval(morningClockInterval);
+    setTimeout(() => {
+      overlay.classList.remove('visible', 'fading-out');
+      overlay.style.display = 'none';
+    }, 1300);
+  }, 60000);
+}
+
+/* ============ INIT ============ */
+loadSettingsStats();
+chatInput.focus();
+if (isMorningMode()) initMorningMode();
 </script>
 </body>
 </html>

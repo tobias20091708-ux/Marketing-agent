@@ -13,6 +13,11 @@ log = structlog.get_logger()
 
 client = AsyncAnthropic(api_key=settings.anthropic_api_key)
 
+# Server-side web search tool — runs on Anthropic's infrastructure, no client
+# execution loop needed. Using the basic (non-dynamic-filtering) variant since
+# this project targets older Claude models (see settings.default_model/fast_model).
+WEB_SEARCH_TOOL = {"type": "web_search_20250305", "name": "web_search"}
+
 
 class AIEngine:
     """Unified AI inference with tool use, retry, and cost tracking."""
@@ -73,14 +78,40 @@ class AIEngine:
             },
         }
 
-    async def quick(self, prompt: str, context: str = "", model: Optional[str] = None) -> str:
-        """Fast single-turn inference for classifications, summaries, etc."""
+    async def quick(
+        self,
+        prompt: str,
+        context: str = "",
+        model: Optional[str] = None,
+        tools: Optional[list[dict]] = None,
+    ) -> str:
+        """Fast single-turn inference for classifications, summaries, etc.
+
+        Pass `tools` (e.g. WEB_SEARCH_TOOL) to give the model live capabilities.
+        Server-side tools like web search still resolve in a single API call.
+        """
         model = model or settings.fast_model
         result = await self.think(
             system=context or "You are a helpful AI assistant. Be concise.",
             messages=[{"role": "user", "content": prompt}],
             model=model,
-            max_tokens=1024,
+            max_tokens=1536 if tools else 1024,
+            tools=tools,
+        )
+        return result["text"]
+
+    async def web_search_answer(self, query: str) -> str:
+        """Answer a query using Claude with live web search access."""
+        result = await self.think(
+            system=(
+                "You are a helpful research assistant with access to live web search. "
+                "Search the web to answer accurately with up-to-date information, and "
+                "briefly mention your sources. Match the user's language (Danish or English)."
+            ),
+            messages=[{"role": "user", "content": query}],
+            model=settings.default_model,
+            tools=[WEB_SEARCH_TOOL],
+            max_tokens=2048,
         )
         return result["text"]
 

@@ -41,9 +41,9 @@ class BaseAgent(ABC):
             tools=tools,
         )
 
-    async def quick_think(self, prompt: str, context: str = "") -> str:
-        """Fast single-turn reasoning."""
-        return await ai.quick(prompt, context or self.system_prompt)
+    async def quick_think(self, prompt: str, context: str = "", tools: list = None) -> str:
+        """Fast single-turn reasoning. Pass `tools` to grant capabilities like web search."""
+        return await ai.quick(prompt, context or self.system_prompt, tools=tools)
 
     async def remember(self, key: str, content: str, metadata: dict = None):
         """Store something in long-term memory."""
