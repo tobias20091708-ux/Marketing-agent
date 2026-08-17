@@ -13,13 +13,9 @@ class Settings(BaseSettings):
 
     # AI
     anthropic_api_key: str = ""
-    openai_api_key: str = ""
+    openai_api_key: str = ""  # used for embeddings in app/services/ai_engine.py
     default_model: str = "claude-sonnet-4-20250514"
     fast_model: str = "claude-haiku-4-5-20251001"
-
-    # OpenAI Realtime API (live voice conversation in the dashboard)
-    openai_realtime_model: str = "gpt-realtime"
-    openai_realtime_voice: str = "marin"
 
     # Database
     database_url: str = "postgresql+asyncpg://aiplatform:password@postgres:5432/aiplatform"
@@ -82,10 +78,6 @@ class Settings(BaseSettings):
     email_auto_reply_confidence: float = 0.9
     support_auto_resolve_l1: bool = True
     support_escalation_channel: str = "support-escalation"
-
-    # Notion (tone/style context for the OpenAI assistant)
-    notion_api_key: str = ""
-    notion_page_id: str = ""
 
     # Monitoring
     enable_prometheus: bool = True

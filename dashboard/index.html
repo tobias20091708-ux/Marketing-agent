@@ -606,69 +606,6 @@ button { font-family: inherit; }
 .send-btn:active { transform: scale(.94); box-shadow: var(--shadow-pressed); }
 .send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
 
-.mic-btn {
-  all: unset;
-  cursor: pointer;
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  background: var(--surface-2);
-  color: var(--text-dim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  flex-shrink: 0;
-  border: 1px solid var(--border);
-  transition: all .15s ease;
-}
-.mic-btn:hover { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
-.mic-btn:disabled { opacity: .4; cursor: not-allowed; }
-.mic-btn.recording {
-  background: linear-gradient(150deg, var(--red), #c23e63);
-  color: #fff;
-  border-color: transparent;
-  box-shadow: 0 0 0 0 rgba(255, 107, 139, 0.55);
-  animation: micPulse 1.3s ease infinite;
-}
-@keyframes micPulse {
-  0%   { box-shadow: 0 0 0 0 rgba(255, 107, 139, 0.55); }
-  70%  { box-shadow: 0 0 0 12px rgba(255, 107, 139, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(255, 107, 139, 0); }
-}
-
-.voice-status {
-  width: 100%;
-  max-width: 760px;
-  margin: 0 auto 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 12.5px;
-  color: var(--text-dim);
-  padding: 8px 14px;
-  border-radius: 20px;
-  background: var(--surface);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  border: 1px solid var(--border-soft);
-  animation: msgIn .25s ease;
-}
-.voice-status.listening { color: var(--red); border-color: rgba(255, 107, 139, 0.3); }
-.voice-status.thinking { color: var(--accent-2); }
-
-.pulse-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--red);
-  box-shadow: 0 0 10px rgba(255, 107, 139, 0.7);
-  animation: dotPulse 1s ease infinite;
-}
-@keyframes dotPulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: .4; transform: scale(.7); }
-}
-
 /* ---- Agents page ---- */
 .page-scroll { flex: 1; overflow-y: auto; }
 .page-inner { max-width: 1040px; margin: 0 auto; padding: 32px; }
@@ -1137,7 +1074,6 @@ button { font-family: inherit; }
       <div class="composer-wrap">
         <form class="composer" id="composer">
           <textarea id="chat-input" rows="1" placeholder="Skriv en besked..." autocomplete="off"></textarea>
-          <button type="button" class="mic-btn" id="mic-btn" title="Start flydende samtale">&#127908;</button>
           <button type="submit" class="send-btn" id="send-btn" title="Send">&#10148;</button>
         </form>
       </div>
@@ -1259,7 +1195,6 @@ button { font-family: inherit; }
 const API = (localStorage.getItem('ai_platform_api_base') || '').replace(/\/$/, '');
 
 const AGENT_META = {
-  'openai-assistant':   { icon: '\u{1F3A4}', label: 'Assistent' },
   'personal-assistant': { icon: '\u{1F642}', label: 'Personlig Assistent' },
   'email-agent':        { icon: '✉️', label: 'Email-agent' },
   'finance-agent':      { icon: '\u{1F4B0}', label: 'Finans-agent' },
@@ -1465,140 +1400,6 @@ document.getElementById('clear-chat').addEventListener('click', () => {
   messagesInner.querySelectorAll('.msg').forEach(m => m.remove());
   if (emptyState) emptyState.style.display = '';
 });
-
-/* ============ FLYDENDE SAMTALE (live stemme via WebRTC / OpenAI Realtime) ============ */
-const micBtn = document.getElementById('mic-btn');
-let voiceStatusEl = null;
-
-function setVoiceStatus(html, cls) {
-  if (html === null) {
-    if (voiceStatusEl) { voiceStatusEl.remove(); voiceStatusEl = null; }
-    return;
-  }
-  if (!voiceStatusEl) {
-    voiceStatusEl = document.createElement('div');
-    voiceStatusEl.className = 'voice-status';
-    document.querySelector('.composer-wrap').prepend(voiceStatusEl);
-  }
-  voiceStatusEl.className = 'voice-status ' + (cls || '');
-  voiceStatusEl.innerHTML = html;
-}
-
-let rtPeerConnection = null;
-let rtDataChannel = null;
-let rtMicStream = null;
-let rtRemoteAudio = null;
-let rtActive = false;
-
-function endRealtimeConversation(statusMsg) {
-  if (rtDataChannel) { try { rtDataChannel.close(); } catch (_) {} rtDataChannel = null; }
-  if (rtPeerConnection) { try { rtPeerConnection.close(); } catch (_) {} rtPeerConnection = null; }
-  if (rtMicStream) { rtMicStream.getTracks().forEach(t => t.stop()); rtMicStream = null; }
-  if (rtRemoteAudio) { rtRemoteAudio.srcObject = null; rtRemoteAudio.remove(); rtRemoteAudio = null; }
-  rtActive = false;
-  micBtn.classList.remove('recording');
-  micBtn.title = 'Start flydende samtale';
-  setAssistantThinking(false);
-  setVoiceStatus(statusMsg || null, statusMsg ? 'thinking' : undefined);
-  if (statusMsg) setTimeout(() => setVoiceStatus(null), 3000);
-}
-
-function handleRealtimeEvent(rawEvent) {
-  let event;
-  try { event = JSON.parse(rawEvent.data); } catch (_) { return; }
-
-  switch (event.type) {
-    case 'conversation.item.input_audio_transcription.completed':
-      if (event.transcript && event.transcript.trim()) renderMessage({ role: 'user', text: event.transcript.trim() });
-      break;
-    case 'response.output_audio_transcript.done':
-      if (event.transcript && event.transcript.trim()) renderMessage({ role: 'assistant', text: event.transcript.trim(), agent: 'openai-assistant' });
-      break;
-    case 'input_audio_buffer.speech_started':
-      setAssistantThinking(false);
-      setVoiceStatus('<span class="pulse-dot"></span> Lytter...', 'listening');
-      break;
-    case 'response.created':
-      setAssistantThinking(true);
-      setVoiceStatus('<span class="typing-dots"><span></span><span></span><span></span></span> Svarer...', 'thinking');
-      break;
-    case 'response.done':
-      setAssistantThinking(false);
-      setVoiceStatus('<span class="pulse-dot"></span> Live samtale — tal naturligt...', 'listening');
-      break;
-    case 'error':
-      renderMessage({ role: 'assistant', text: 'Samtalefejl: ' + (event.error?.message || 'Ukendt fejl'), isError: true });
-      break;
-  }
-}
-
-async function startRealtimeConversation() {
-  if (!navigator.mediaDevices?.getUserMedia) {
-    renderMessage({ role: 'assistant', text: 'Din browser understøtter ikke mikrofon-adgang.', isError: true });
-    return;
-  }
-
-  micBtn.disabled = true;
-  setVoiceStatus('<span class="pulse-dot"></span> Forbinder...', 'listening');
-
-  try {
-    const session = await fetchJSON('/api/voice/realtime-session', { method: 'POST' });
-    const ephemeralKey = session.client_secret;
-    if (!ephemeralKey) throw new Error('Intet token fra serveren');
-
-    const pc = new RTCPeerConnection();
-    rtPeerConnection = pc;
-
-    const remoteAudio = document.createElement('audio');
-    remoteAudio.autoplay = true;
-    rtRemoteAudio = remoteAudio;
-    pc.ontrack = (e) => { remoteAudio.srcObject = e.streams[0]; };
-
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    rtMicStream = stream;
-    stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-    const dc = pc.createDataChannel('oai-events');
-    rtDataChannel = dc;
-    dc.addEventListener('message', handleRealtimeEvent);
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-
-    const sdpRes = await fetch('https://api.openai.com/v1/realtime/calls', {
-      method: 'POST',
-      body: offer.sdp,
-      headers: {
-        'Authorization': 'Bearer ' + ephemeralKey,
-        'Content-Type': 'application/sdp',
-      },
-    });
-    if (!sdpRes.ok) throw new Error('OpenAI afviste forbindelsen (HTTP ' + sdpRes.status + ')');
-    const answerSdp = await sdpRes.text();
-    await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-
-    rtActive = true;
-    micBtn.classList.add('recording');
-    micBtn.title = 'Afslut samtale';
-    setVoiceStatus('<span class="pulse-dot"></span> Live samtale — tal naturligt...', 'listening');
-  } catch (err) {
-    endRealtimeConversation();
-    renderMessage({ role: 'assistant', text: 'Kunne ikke starte samtalen: ' + err.message, isError: true });
-  } finally {
-    micBtn.disabled = false;
-  }
-}
-
-function toggleRealtimeConversation() {
-  if (rtActive) {
-    endRealtimeConversation();
-  } else {
-    startRealtimeConversation();
-  }
-}
-
-micBtn.addEventListener('click', toggleRealtimeConversation);
-window.addEventListener('beforeunload', () => { if (rtActive) endRealtimeConversation(); });
 
 /* ============ AGENTS PAGE ============ */
 function statusClass(s) {

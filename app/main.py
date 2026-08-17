@@ -2,17 +2,15 @@
 AI Operations Platform — Main FastAPI application.
 Serves the dashboard, REST API, and webhook endpoints.
 """
-import base64
 import json
 import re
-import httpx
 import structlog
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from fastapi import FastAPI, HTTPException, Request, Depends, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional
@@ -25,7 +23,6 @@ from app.services.ai_engine import ai, WEB_SEARCH_TOOL
 from app.services.audit import audit
 from app.services.memory import memory
 from app.agents import get_agent, AGENTS
-from app.agents.openai_assistant import openai_assistant
 
 structlog.configure(
     processors=[
@@ -317,42 +314,38 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    """Chat endpoint.
+    """Chat with an agent.
 
-    Default: the OpenAI assistant (GPT-4o) handles the message. It can call
-    the Claude specialist agents internally via function calling when
-    relevant, and always composes the final answer itself — the user never
-    sees the handoff. The Claude agents (including personal-assistant) still
-    work exactly as before when called explicitly, via `agent_id` or an
-    explicit "brug X-agent" request in the message. A "set alarm to HH:MM"
-    request is caught first via keyword matching, with no AI call at all.
+    The personal assistant handles every message directly with a single AI
+    call (including automatic web search when needed). It only routes to a
+    specialist agent when the user explicitly asks for one (e.g. "brug
+    email-agent") — no separate classification call is made. A "set alarm to
+    HH:MM" request is caught first via keyword matching, with no AI call at all.
     """
-    explicitly_routed = bool(req.agent_id and req.agent_id in AGENTS)
-
     alarm_time = detect_alarm_time(req.message)
-    if alarm_time and not explicitly_routed:
+    if alarm_time and not (req.agent_id and req.agent_id in AGENTS):
         alarm = await create_alarm(alarm_time)
         await audit.log_action(
-            "openai-assistant", "alarm_created_via_chat", {"time": alarm_time}
+            "personal-assistant", "alarm_created_via_chat", {"time": alarm_time}
         )
         return {
             "response": f"Alarm sat til kl. {alarm_time} ⏰ (gentages dagligt)",
-            "agent": "openai-assistant",
+            "agent": "personal-assistant",
             "alarm": alarm,
         }
 
-    agent_id = req.agent_id if explicitly_routed else detect_explicit_agent(req.message)
+    if req.agent_id and req.agent_id in AGENTS:
+        agent_id = req.agent_id
+    else:
+        agent_id = detect_explicit_agent(req.message) or "personal-assistant"
 
-    if agent_id:
-        # Explicit routing to a Claude agent — unchanged behavior.
-        agent = get_agent(agent_id)
-        tools = [WEB_SEARCH_TOOL] if agent_id == "personal-assistant" else None
-        response = await agent.quick_think(req.message, tools=tools)
-        return {"response": response, "agent": agent_id}
+    agent = get_agent(agent_id)
+    # Only the personal assistant gets live web search — specialist agents
+    # work off the DB/integrations they already have.
+    tools = [WEB_SEARCH_TOOL] if agent_id == "personal-assistant" else None
+    response = await agent.quick_think(req.message, tools=tools)
 
-    # Default: the OpenAI assistant, which may delegate to Claude specialists internally.
-    response = await openai_assistant.chat(req.message)
-    return {"response": response, "agent": "openai-assistant"}
+    return {"response": response, "agent": agent_id}
 
 
 # === WEB SEARCH ===
@@ -363,127 +356,6 @@ async def web_search(q: str):
         raise HTTPException(400, "Query parameter 'q' is required")
     answer = await ai.web_search_answer(q)
     return {"query": q, "answer": answer}
-
-
-# === VOICE (OpenAI Whisper + TTS) ===
-class SpeakRequest(BaseModel):
-    text: str
-
-
-@app.post("/api/voice/transcribe")
-async def voice_transcribe(audio: UploadFile = File(...)):
-    """Speech-to-text via Whisper. Returns the transcribed text."""
-    audio_bytes = await audio.read()
-    if not audio_bytes:
-        raise HTTPException(400, "Tom lyd-fil")
-    text_out = await openai_assistant.transcribe(audio_bytes, filename=audio.filename or "audio.webm")
-    return {"text": text_out}
-
-
-@app.post("/api/voice/speak")
-async def voice_speak(req: SpeakRequest):
-    """Text-to-speech via OpenAI TTS. Returns raw MP3 audio."""
-    if not req.text or not req.text.strip():
-        raise HTTPException(400, "text må ikke være tom")
-    audio_bytes = await openai_assistant.speak(req.text)
-    return Response(content=audio_bytes, media_type="audio/mpeg")
-
-
-@app.post("/api/voice/chat")
-async def voice_chat(audio: UploadFile = File(...)):
-    """Full voice round-trip: transcribe → chat with the assistant → speak the reply.
-
-    Returns the reply text plus base64-encoded MP3 audio in one JSON response,
-    so the dashboard can render the bubble and play the audio together.
-    """
-    audio_bytes = await audio.read()
-    if not audio_bytes:
-        raise HTTPException(400, "Tom lyd-fil")
-
-    user_text = await openai_assistant.transcribe(audio_bytes, filename=audio.filename or "audio.webm")
-    if not user_text or not user_text.strip():
-        raise HTTPException(400, "Kunne ikke genkende tale i optagelsen")
-
-    reply_text = await openai_assistant.chat(user_text)
-    reply_audio = await openai_assistant.speak(reply_text)
-
-    return {
-        "transcript": user_text,
-        "text": reply_text,
-        "audio_base64": base64.b64encode(reply_audio).decode("ascii"),
-    }
-
-
-# === REALTIME VOICE (live, flowing conversation via WebRTC) ===
-OPENAI_REALTIME_SESSION_URL = "https://api.openai.com/v1/realtime/client_secrets"
-
-
-@app.post("/api/voice/realtime-session")
-async def create_realtime_session():
-    """Mint a short-lived OpenAI Realtime API token for a live voice conversation.
-
-    The browser uses this ephemeral token to connect *directly* to OpenAI over
-    WebRTC (audio never passes through this server) — that's what makes the
-    conversation feel truly live instead of record → wait → respond. The real
-    OPENAI_API_KEY never leaves the server; only this short-lived, scoped
-    token is handed to the client.
-    """
-    if not settings.openai_api_key:
-        raise HTTPException(500, "OPENAI_API_KEY er ikke sat på serveren")
-
-    instructions = await openai_assistant.get_realtime_instructions()
-
-    try:
-        async with httpx.AsyncClient(timeout=15.0) as http_client:
-            resp = await http_client.post(
-                OPENAI_REALTIME_SESSION_URL,
-                headers={
-                    "Authorization": f"Bearer {settings.openai_api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "session": {
-                        "type": "realtime",
-                        "model": settings.openai_realtime_model,
-                        "instructions": instructions,
-                        "audio": {
-                            "output": {"voice": settings.openai_realtime_voice},
-                            "input": {
-                                "turn_detection": {
-                                    "type": "server_vad",
-                                    "create_response": True,
-                                    "interrupt_response": True,
-                                    "silence_duration_ms": 500,
-                                    "prefix_padding_ms": 300,
-                                    "threshold": 0.5,
-                                },
-                                "transcription": {"model": "gpt-4o-mini-transcribe"},
-                            },
-                        },
-                    },
-                    # Token only needs to live long enough for the browser to open the
-                    # WebRTC connection right after fetching it — not the whole call.
-                    "expires_after": {"anchor": "created_at", "seconds": 300},
-                },
-            )
-    except httpx.HTTPError as e:
-        log.error("realtime_session.request_failed", error=str(e))
-        raise HTTPException(502, f"Kunne ikke nå OpenAI: {e}")
-
-    if resp.status_code >= 400:
-        log.error("realtime_session.rejected", status=resp.status_code, body=resp.text[:500])
-        raise HTTPException(502, f"OpenAI afviste realtime-session ({resp.status_code}): {resp.text[:200]}")
-
-    data = resp.json()
-    client_secret = data.get("value")
-    if not client_secret:
-        raise HTTPException(502, "OpenAI returnerede intet token")
-
-    return {
-        "client_secret": client_secret,
-        "expires_at": data.get("expires_at"),
-        "model": settings.openai_realtime_model,
-    }
 
 
 # === ALARMS ===
