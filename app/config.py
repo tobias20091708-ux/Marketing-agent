@@ -14,8 +14,7 @@ class Settings(BaseSettings):
     # AI
     anthropic_api_key: str = ""
     openai_api_key: str = ""  # used for embeddings in app/services/ai_engine.py
-    default_model: str = "claude-sonnet-4-20250514"
-    fast_model: str = "claude-haiku-4-5-20251001"
+    default_model: str = "claude-sonnet-4-6"
 
     # Database
     database_url: str = "postgresql+asyncpg://aiplatform:password@postgres:5432/aiplatform"

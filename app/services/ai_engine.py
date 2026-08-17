@@ -15,7 +15,7 @@ client = AsyncAnthropic(api_key=settings.anthropic_api_key)
 
 # Server-side web search tool — runs on Anthropic's infrastructure, no client
 # execution loop needed. Using the basic (non-dynamic-filtering) variant since
-# this project targets older Claude models (see settings.default_model/fast_model).
+# this project targets older Claude models (see settings.default_model).
 WEB_SEARCH_TOOL = {"type": "web_search_20250305", "name": "web_search"}
 
 
@@ -90,7 +90,7 @@ class AIEngine:
         Pass `tools` (e.g. WEB_SEARCH_TOOL) to give the model live capabilities.
         Server-side tools like web search still resolve in a single API call.
         """
-        model = model or settings.fast_model
+        model = model or settings.default_model
         result = await self.think(
             system=context or "You are a helpful AI assistant. Be concise.",
             messages=[{"role": "user", "content": prompt}],
