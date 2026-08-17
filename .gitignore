@@ -1,0 +1,29 @@
+# Environment / secrets
+.env
+.env.local
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node (alarm-client)
+node_modules/
+npm-debug.log*
+
+# Local data / logs
+data/
+*.log
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+*.swp

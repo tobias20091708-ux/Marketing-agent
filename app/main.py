@@ -5,6 +5,7 @@ Serves the dashboard, REST API, and webhook endpoints.
 import base64
 import json
 import re
+import httpx
 import structlog
 from datetime import datetime
 from pathlib import Path
@@ -410,6 +411,78 @@ async def voice_chat(audio: UploadFile = File(...)):
         "transcript": user_text,
         "text": reply_text,
         "audio_base64": base64.b64encode(reply_audio).decode("ascii"),
+    }
+
+
+# === REALTIME VOICE (live, flowing conversation via WebRTC) ===
+OPENAI_REALTIME_SESSION_URL = "https://api.openai.com/v1/realtime/client_secrets"
+
+
+@app.post("/api/voice/realtime-session")
+async def create_realtime_session():
+    """Mint a short-lived OpenAI Realtime API token for a live voice conversation.
+
+    The browser uses this ephemeral token to connect *directly* to OpenAI over
+    WebRTC (audio never passes through this server) — that's what makes the
+    conversation feel truly live instead of record → wait → respond. The real
+    OPENAI_API_KEY never leaves the server; only this short-lived, scoped
+    token is handed to the client.
+    """
+    if not settings.openai_api_key:
+        raise HTTPException(500, "OPENAI_API_KEY er ikke sat på serveren")
+
+    instructions = await openai_assistant.get_realtime_instructions()
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as http_client:
+            resp = await http_client.post(
+                OPENAI_REALTIME_SESSION_URL,
+                headers={
+                    "Authorization": f"Bearer {settings.openai_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "session": {
+                        "type": "realtime",
+                        "model": settings.openai_realtime_model,
+                        "instructions": instructions,
+                        "audio": {
+                            "output": {"voice": settings.openai_realtime_voice},
+                            "input": {
+                                "turn_detection": {
+                                    "type": "server_vad",
+                                    "create_response": True,
+                                    "interrupt_response": True,
+                                    "silence_duration_ms": 500,
+                                    "prefix_padding_ms": 300,
+                                    "threshold": 0.5,
+                                },
+                                "transcription": {"model": "gpt-4o-mini-transcribe"},
+                            },
+                        },
+                    },
+                    # Token only needs to live long enough for the browser to open the
+                    # WebRTC connection right after fetching it — not the whole call.
+                    "expires_after": {"anchor": "created_at", "seconds": 300},
+                },
+            )
+    except httpx.HTTPError as e:
+        log.error("realtime_session.request_failed", error=str(e))
+        raise HTTPException(502, f"Kunne ikke nå OpenAI: {e}")
+
+    if resp.status_code >= 400:
+        log.error("realtime_session.rejected", status=resp.status_code, body=resp.text[:500])
+        raise HTTPException(502, f"OpenAI afviste realtime-session ({resp.status_code}): {resp.text[:200]}")
+
+    data = resp.json()
+    client_secret = data.get("value")
+    if not client_secret:
+        raise HTTPException(502, "OpenAI returnerede intet token")
+
+    return {
+        "client_secret": client_secret,
+        "expires_at": data.get("expires_at"),
+        "model": settings.openai_realtime_model,
     }
 
 

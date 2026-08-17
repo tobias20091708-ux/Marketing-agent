@@ -13,4 +13,8 @@ COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+# Shell form (not exec-form JSON array) so $PORT actually expands — Railway
+# injects its own port at runtime and routes traffic there, so a hardcoded
+# --port would silently break the deployment. Falls back to 8000 for local
+# docker-compose, where no PORT env var is set.
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 4

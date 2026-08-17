@@ -145,11 +145,26 @@ MAX_TOOL_ROUNDS = 3
 class OpenAIAssistant:
     """Primary voice/chat assistant. GPT-4o with Claude specialists as internal tools."""
 
-    async def _system_prompt(self) -> str:
+    async def get_system_prompt(self) -> str:
         tone_context = await notion_reader.get_context()
         if tone_context:
             return f"{BASE_SYSTEM_PROMPT}\n\n--- Din tone og stil (fra brugerens noter) ---\n{tone_context}"
         return BASE_SYSTEM_PROMPT
+
+    async def get_realtime_instructions(self) -> str:
+        """System prompt for live voice conversations (OpenAI Realtime API).
+
+        Same persona and tone as the chat assistant, plus guidance for
+        speaking naturally out loud rather than writing text.
+        """
+        base = await self.get_system_prompt()
+        return (
+            f"{base}\n\n"
+            "--- Du taler nu live med brugeren over stemme ---\n"
+            "Svar kort og naturligt, som i en almindelig samtale — ikke som skrevet tekst. "
+            "Brug aldrig lister, overskrifter, markdown eller symboler, da det bliver læst højt. "
+            "Hold pauser og sætninger korte, og lad brugeren afbryde og følge op naturligt."
+        )
 
     async def _call_specialist(self, tool_name: str, query: str) -> str:
         agent_id = _TOOL_TO_AGENT_ID.get(tool_name)
@@ -164,7 +179,7 @@ class OpenAIAssistant:
 
     async def chat(self, message: str, history: Optional[list[dict]] = None) -> str:
         """Send a message to GPT-4o, resolving any specialist tool calls along the way."""
-        messages = [{"role": "system", "content": await self._system_prompt()}]
+        messages = [{"role": "system", "content": await self.get_system_prompt()}]
         messages.extend(history or [])
         messages.append({"role": "user", "content": message})
 

@@ -17,6 +17,10 @@ class Settings(BaseSettings):
     default_model: str = "claude-sonnet-4-20250514"
     fast_model: str = "claude-haiku-4-5-20251001"
 
+    # OpenAI Realtime API (live voice conversation in the dashboard)
+    openai_realtime_model: str = "gpt-realtime"
+    openai_realtime_voice: str = "marin"
+
     # Database
     database_url: str = "postgresql+asyncpg://aiplatform:password@postgres:5432/aiplatform"
     redis_url: str = "redis://redis:6379/0"

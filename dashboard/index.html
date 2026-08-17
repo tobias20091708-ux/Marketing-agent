@@ -1137,7 +1137,7 @@ button { font-family: inherit; }
       <div class="composer-wrap">
         <form class="composer" id="composer">
           <textarea id="chat-input" rows="1" placeholder="Skriv en besked..." autocomplete="off"></textarea>
-          <button type="button" class="mic-btn" id="mic-btn" title="Optag stemme">&#127908;</button>
+          <button type="button" class="mic-btn" id="mic-btn" title="Start flydende samtale">&#127908;</button>
           <button type="submit" class="send-btn" id="send-btn" title="Send">&#10148;</button>
         </form>
       </div>
@@ -1466,11 +1466,8 @@ document.getElementById('clear-chat').addEventListener('click', () => {
   if (emptyState) emptyState.style.display = '';
 });
 
-/* ============ VOICE (mikrofon) ============ */
+/* ============ FLYDENDE SAMTALE (live stemme via WebRTC / OpenAI Realtime) ============ */
 const micBtn = document.getElementById('mic-btn');
-let mediaRecorder = null;
-let audioChunks = [];
-let isRecording = false;
 let voiceStatusEl = null;
 
 function setVoiceStatus(html, cls) {
@@ -1487,77 +1484,121 @@ function setVoiceStatus(html, cls) {
   voiceStatusEl.innerHTML = html;
 }
 
-async function toggleVoiceRecording() {
-  if (isRecording) {
-    mediaRecorder.stop();
-    return;
-  }
-  if (!navigator.mediaDevices?.getUserMedia) {
-    renderMessage({ role: 'assistant', text: 'Din browser understøtter ikke mikrofon-optagelse.', isError: true });
-    return;
-  }
+let rtPeerConnection = null;
+let rtDataChannel = null;
+let rtMicStream = null;
+let rtRemoteAudio = null;
+let rtActive = false;
 
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    audioChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
+function endRealtimeConversation(statusMsg) {
+  if (rtDataChannel) { try { rtDataChannel.close(); } catch (_) {} rtDataChannel = null; }
+  if (rtPeerConnection) { try { rtPeerConnection.close(); } catch (_) {} rtPeerConnection = null; }
+  if (rtMicStream) { rtMicStream.getTracks().forEach(t => t.stop()); rtMicStream = null; }
+  if (rtRemoteAudio) { rtRemoteAudio.srcObject = null; rtRemoteAudio.remove(); rtRemoteAudio = null; }
+  rtActive = false;
+  micBtn.classList.remove('recording');
+  micBtn.title = 'Start flydende samtale';
+  setAssistantThinking(false);
+  setVoiceStatus(statusMsg || null, statusMsg ? 'thinking' : undefined);
+  if (statusMsg) setTimeout(() => setVoiceStatus(null), 3000);
+}
 
-    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
-    mediaRecorder.onstop = async () => {
-      stream.getTracks().forEach(t => t.stop());
-      isRecording = false;
-      micBtn.classList.remove('recording');
-      const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-      await sendVoiceMessage(blob);
-    };
+function handleRealtimeEvent(rawEvent) {
+  let event;
+  try { event = JSON.parse(rawEvent.data); } catch (_) { return; }
 
-    mediaRecorder.start();
-    isRecording = true;
-    micBtn.classList.add('recording');
-    setVoiceStatus('<span class="pulse-dot"></span> Lytter...', 'listening');
-
-    // Auto-stop efter 20 sekunder, så en optagelse aldrig kører for evigt
-    setTimeout(() => { if (isRecording) mediaRecorder.stop(); }, 20000);
-  } catch (err) {
-    setVoiceStatus(null);
-    renderMessage({ role: 'assistant', text: 'Kunne ikke få adgang til mikrofonen: ' + err.message, isError: true });
+  switch (event.type) {
+    case 'conversation.item.input_audio_transcription.completed':
+      if (event.transcript && event.transcript.trim()) renderMessage({ role: 'user', text: event.transcript.trim() });
+      break;
+    case 'response.output_audio_transcript.done':
+      if (event.transcript && event.transcript.trim()) renderMessage({ role: 'assistant', text: event.transcript.trim(), agent: 'openai-assistant' });
+      break;
+    case 'input_audio_buffer.speech_started':
+      setAssistantThinking(false);
+      setVoiceStatus('<span class="pulse-dot"></span> Lytter...', 'listening');
+      break;
+    case 'response.created':
+      setAssistantThinking(true);
+      setVoiceStatus('<span class="typing-dots"><span></span><span></span><span></span></span> Svarer...', 'thinking');
+      break;
+    case 'response.done':
+      setAssistantThinking(false);
+      setVoiceStatus('<span class="pulse-dot"></span> Live samtale — tal naturligt...', 'listening');
+      break;
+    case 'error':
+      renderMessage({ role: 'assistant', text: 'Samtalefejl: ' + (event.error?.message || 'Ukendt fejl'), isError: true });
+      break;
   }
 }
 
-async function sendVoiceMessage(blob) {
-  setVoiceStatus('<span class="typing-dots"><span></span><span></span><span></span></span> Tænker...', 'thinking');
-  sendBtn.disabled = true;
+async function startRealtimeConversation() {
+  if (!navigator.mediaDevices?.getUserMedia) {
+    renderMessage({ role: 'assistant', text: 'Din browser understøtter ikke mikrofon-adgang.', isError: true });
+    return;
+  }
+
   micBtn.disabled = true;
-  setAssistantThinking(true);
+  setVoiceStatus('<span class="pulse-dot"></span> Forbinder...', 'listening');
 
   try {
-    const formData = new FormData();
-    formData.append('audio', blob, 'recording.webm');
+    const session = await fetchJSON('/api/voice/realtime-session', { method: 'POST' });
+    const ephemeralKey = session.client_secret;
+    if (!ephemeralKey) throw new Error('Intet token fra serveren');
 
-    const res = await fetch(API + '/api/voice/chat', { method: 'POST', body: formData });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const data = await res.json();
+    const pc = new RTCPeerConnection();
+    rtPeerConnection = pc;
 
-    setVoiceStatus(null);
+    const remoteAudio = document.createElement('audio');
+    remoteAudio.autoplay = true;
+    rtRemoteAudio = remoteAudio;
+    pc.ontrack = (e) => { remoteAudio.srcObject = e.streams[0]; };
 
-    if (data.transcript) renderMessage({ role: 'user', text: data.transcript });
-    renderMessage({ role: 'assistant', text: data.text, agent: 'openai-assistant' });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    rtMicStream = stream;
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-    if (data.audio_base64) {
-      const audio = new Audio('data:audio/mpeg;base64,' + data.audio_base64);
-      audio.play().catch(() => {});
-    }
+    const dc = pc.createDataChannel('oai-events');
+    rtDataChannel = dc;
+    dc.addEventListener('message', handleRealtimeEvent);
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    const sdpRes = await fetch('https://api.openai.com/v1/realtime/calls', {
+      method: 'POST',
+      body: offer.sdp,
+      headers: {
+        'Authorization': 'Bearer ' + ephemeralKey,
+        'Content-Type': 'application/sdp',
+      },
+    });
+    if (!sdpRes.ok) throw new Error('OpenAI afviste forbindelsen (HTTP ' + sdpRes.status + ')');
+    const answerSdp = await sdpRes.text();
+    await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+
+    rtActive = true;
+    micBtn.classList.add('recording');
+    micBtn.title = 'Afslut samtale';
+    setVoiceStatus('<span class="pulse-dot"></span> Live samtale — tal naturligt...', 'listening');
   } catch (err) {
-    setVoiceStatus(null);
-    renderMessage({ role: 'assistant', text: 'Stemme-kaldet fejlede: ' + err.message, isError: true });
+    endRealtimeConversation();
+    renderMessage({ role: 'assistant', text: 'Kunne ikke starte samtalen: ' + err.message, isError: true });
   } finally {
-    setAssistantThinking(false);
-    sendBtn.disabled = false;
     micBtn.disabled = false;
   }
 }
 
-micBtn.addEventListener('click', toggleVoiceRecording);
+function toggleRealtimeConversation() {
+  if (rtActive) {
+    endRealtimeConversation();
+  } else {
+    startRealtimeConversation();
+  }
+}
+
+micBtn.addEventListener('click', toggleRealtimeConversation);
+window.addEventListener('beforeunload', () => { if (rtActive) endRealtimeConversation(); });
 
 /* ============ AGENTS PAGE ============ */
 function statusClass(s) {
