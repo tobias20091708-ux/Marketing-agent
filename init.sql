@@ -213,4 +213,5 @@ INSERT INTO agents (id, name, type, config) VALUES
 ('marketing-agent', 'Marketing agent', 'marketing', '{"report_schedule": "0 8 * * 1"}'),
 ('sales-agent', 'Sales agent', 'sales', '{"lead_score_threshold": 70}'),
 ('support-agent', 'Support agent', 'support', '{"auto_resolve_l1": true}'),
-('dev-agent', 'Dev agent', 'dev', '{"auto_review": true}');
+('dev-agent', 'Dev agent', 'dev', '{"auto_review": true}'),
+('personal-assistant', 'Personal assistant', 'personal', '{"default_fallback": true}');

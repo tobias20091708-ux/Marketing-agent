@@ -214,7 +214,7 @@ Available agents: {list(AGENTS.keys())}
 
 Return JSON: {{"agent_id": "agent-id", "task_type": "type", "reasoning": "why"}}
 """)
-        agent_id = routing.get("agent_id", "email-agent")
+        agent_id = routing.get("agent_id", "personal-assistant")
         agent = get_agent(agent_id)
         response = await agent.quick_think(req.message)
 

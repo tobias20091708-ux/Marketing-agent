@@ -5,6 +5,7 @@ from app.agents.marketing_agent import MarketingAgent
 from app.agents.sales_agent import SalesAgent
 from app.agents.support_agent import SupportAgent
 from app.agents.dev_agent import DevAgent
+from app.agents.personal_assistant_agent import PersonalAssistantAgent
 
 AGENTS = {
     "email-agent": EmailAgent,
@@ -13,6 +14,7 @@ AGENTS = {
     "sales-agent": SalesAgent,
     "support-agent": SupportAgent,
     "dev-agent": DevAgent,
+    "personal-assistant": PersonalAssistantAgent,
 }
 
 
