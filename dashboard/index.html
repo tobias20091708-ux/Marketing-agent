@@ -32,6 +32,7 @@
   --shadow-pressed: inset 0 2px 6px rgba(0, 0, 0, 0.4);
   --glow: 0 0 0 1px rgba(91, 127, 255, 0.3), 0 0 32px -6px rgba(91, 127, 255, 0.55);
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", system-ui, sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", "Courier New", ui-monospace, monospace;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -50,7 +51,29 @@ body {
   color: var(--text);
   min-height: 100vh;
   overflow: hidden;
+  position: relative;
 }
+
+/* ---- HUD grid overlay — futuristic backdrop, sits behind everything ---- */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -2px;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(107, 140, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(107, 140, 255, 0.055) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(1100px 700px at 20% 0%, #000 0%, transparent 72%);
+  -webkit-mask-image: radial-gradient(1100px 700px at 20% 0%, #000 0%, transparent 72%);
+  animation: gridDrift 26s linear infinite;
+}
+@keyframes gridDrift {
+  0%   { background-position: 0 0, 0 0; }
+  100% { background-position: 46px 92px, 46px 92px; }
+}
+.app, .bottom-nav, #morning-mode { position: relative; z-index: 1; }
 
 ::selection { background: var(--accent); color: #fff; }
 
@@ -79,7 +102,18 @@ button { font-family: inherit; }
   flex-direction: column;
   padding: 22px 16px;
   gap: 24px;
+  position: relative;
 }
+.sidebar::after {
+  content: '';
+  position: absolute;
+  top: 0; right: -1px; bottom: 0;
+  width: 1px;
+  background: linear-gradient(180deg, transparent, var(--accent-2) 35%, var(--accent-end) 60%, transparent);
+  opacity: .55;
+  animation: railPulse 5s ease-in-out infinite;
+}
+@keyframes railPulse { 0%, 100% { opacity: .3; } 50% { opacity: .75; } }
 
 .brand {
   display: flex;
@@ -101,6 +135,11 @@ button { font-family: inherit; }
   color: white;
   flex-shrink: 0;
   box-shadow: 0 8px 24px -6px rgba(91, 127, 255, 0.75), 0 0 30px -10px rgba(139, 92, 246, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 4px rgba(0, 0, 0, 0.15);
+  animation: markGlow 4s ease-in-out infinite;
+}
+@keyframes markGlow {
+  0%, 100% { box-shadow: 0 8px 24px -6px rgba(91, 127, 255, 0.75), 0 0 30px -10px rgba(139, 92, 246, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.3), inset 0 -2px 4px rgba(0, 0, 0, 0.15); }
+  50%      { box-shadow: 0 8px 30px -4px rgba(91, 127, 255, 0.95), 0 0 44px -8px rgba(34, 211, 238, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 -2px 4px rgba(0, 0, 0, 0.15); }
 }
 
 .brand-text {
@@ -155,6 +194,7 @@ button { font-family: inherit; }
 
 .nav-badge {
   margin-left: auto;
+  font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--text-faint);
   background: var(--surface-2);
@@ -167,7 +207,8 @@ button { font-family: inherit; }
 .sidebar-status {
   border-top: 1px solid var(--border-soft);
   padding-top: 14px;
-  font-size: 11.5px;
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: var(--text-faint);
   display: flex;
   flex-direction: column;
@@ -209,7 +250,20 @@ button { font-family: inherit; }
 .chat-header h1 { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
 .chat-header p { font-size: 12.5px; color: var(--text-faint); margin-top: 2px; }
 
-.chat-header-actions { display: flex; gap: 8px; }
+.chat-header-actions { display: flex; align-items: center; gap: 10px; }
+
+.hud-clock {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: .04em;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  padding: 6px 12px;
+  border-radius: 9px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--shadow-raised);
+}
 
 .icon-btn {
   all: unset;
@@ -274,13 +328,15 @@ button { font-family: inherit; }
 
 .msg-meta { font-size: 11px; color: var(--text-faint); padding: 0 2px; display: flex; gap: 6px; align-items: center; }
 .agent-tag {
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   padding: 1px 7px;
   border-radius: 20px;
   background: var(--accent-soft);
-  color: var(--accent);
-  letter-spacing: .01em;
+  color: var(--accent-2);
+  letter-spacing: .04em;
+  text-transform: uppercase;
 }
 
 .bubble {
@@ -331,11 +387,80 @@ button { font-family: inherit; }
   margin: auto;
   text-align: center;
   color: var(--text-faint);
-  max-width: 420px;
-  padding: 32px;
+  max-width: 460px;
+  padding: 40px 36px;
+  background: var(--surface);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-soft);
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: var(--shadow-raised);
+  position: relative;
+  overflow: hidden;
 }
-.empty-state h2 { color: var(--text); font-size: 16px; font-weight: 650; margin-bottom: 6px; }
-.empty-state p { font-size: 13px; line-height: 1.6; }
+.empty-state::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent 30%, rgba(91, 127, 255, 0.10) 50%, transparent 70%);
+  background-size: 220% 220%;
+  animation: sheen 7s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes sheen {
+  0%, 100% { background-position: 0% 0%; }
+  50%      { background-position: 100% 100%; }
+}
+.empty-state h2 { position: relative; z-index: 1; color: var(--text); font-size: 17px; font-weight: 650; margin-bottom: 6px; letter-spacing: -0.01em; }
+.empty-state p { position: relative; z-index: 1; font-size: 13px; line-height: 1.6; }
+.empty-state .blob-wrap { position: relative; z-index: 1; }
+
+.empty-eyebrow {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--accent-2);
+  background: var(--accent-soft);
+  border: 1px solid rgba(139, 92, 246, 0.32);
+  padding: 4px 11px;
+  border-radius: 20px;
+  margin-bottom: 18px;
+}
+.empty-eyebrow .dot-live {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: dotPulse 1.6s ease infinite;
+}
+
+/* ---- HUD corner brackets — sci-fi accent for cards ---- */
+.hud-corners { position: relative; }
+.hud-corners::after {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  pointer-events: none;
+  z-index: 2;
+  background:
+    linear-gradient(var(--accent-2), var(--accent-2)) top left / 14px 2px no-repeat,
+    linear-gradient(var(--accent-2), var(--accent-2)) top left / 2px 14px no-repeat,
+    linear-gradient(var(--accent-end), var(--accent-end)) top right / 14px 2px no-repeat,
+    linear-gradient(var(--accent-end), var(--accent-end)) top right / 2px 14px no-repeat,
+    linear-gradient(var(--accent-end), var(--accent-end)) bottom left / 14px 2px no-repeat,
+    linear-gradient(var(--accent-end), var(--accent-end)) bottom left / 2px 14px no-repeat,
+    linear-gradient(var(--accent-2), var(--accent-2)) bottom right / 14px 2px no-repeat,
+    linear-gradient(var(--accent-2), var(--accent-2)) bottom right / 2px 14px no-repeat;
+  opacity: 0;
+  transition: opacity .25s ease;
+}
+.hud-corners.always-on::after { opacity: .65; }
+.hud-corners:hover::after { opacity: .85; }
 
 /* ---- AI blob (assistant "aura") ---- */
 .blob-wrap {
@@ -613,14 +738,16 @@ button { font-family: inherit; }
 .agent-card-footer { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--border-soft); }
 
 .status-pill {
-  font-size: 10.5px;
+  font-family: var(--font-mono);
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: .03em;
   padding: 3px 9px;
   border-radius: 20px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  text-transform: capitalize;
+  text-transform: uppercase;
 }
 .status-pill .dot { box-shadow: none; }
 .status-pill.idle { background: rgba(52, 224, 161, 0.14); color: var(--green); }
@@ -629,7 +756,7 @@ button { font-family: inherit; }
 .status-pill.pending { background: rgba(251, 191, 108, 0.14); color: var(--yellow); }
 .status-pill.unknown { background: var(--surface-2); color: var(--text-faint); }
 
-.agent-lastrun { font-size: 11px; color: var(--text-faint); }
+.agent-lastrun { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
 
 .skeleton {
   background: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 37%, var(--surface) 63%);
@@ -700,10 +827,73 @@ button { font-family: inherit; }
 .toggle.on { background: var(--accent-soft); border-color: var(--accent); }
 .toggle.on::after { transform: translateX(17px); background: var(--accent); }
 
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-.stat-box { background: linear-gradient(150deg, var(--surface), var(--surface-2)); border-radius: 12px; padding: 14px 16px; border: 1px solid var(--border-soft); box-shadow: var(--shadow-raised); }
-.stat-box .val { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
-.stat-box .lbl { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.stat-box {
+  background: linear-gradient(150deg, var(--surface), var(--surface-2));
+  border-radius: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-raised);
+  position: relative;
+  overflow: hidden;
+}
+.stat-box .lbl {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 6px;
+}
+.stat-box .val { font-family: var(--font-mono); font-size: 21px; font-weight: 650; letter-spacing: -0.01em; }
+
+.mini-bars { display: flex; align-items: flex-end; gap: 4px; height: 26px; margin-top: 12px; }
+.mini-bars span {
+  flex: 1;
+  border-radius: 3px 3px 1px 1px;
+  background: linear-gradient(180deg, var(--accent-2), var(--accent));
+  opacity: .85;
+  transform-origin: bottom;
+  animation: barGrow .7s cubic-bezier(.2,.8,.2,1) backwards;
+}
+.mini-bars span:nth-child(1) { height: 40%; animation-delay: .02s; }
+.mini-bars span:nth-child(2) { height: 65%; animation-delay: .06s; }
+.mini-bars span:nth-child(3) { height: 50%; animation-delay: .10s; }
+.mini-bars span:nth-child(4) { height: 85%; animation-delay: .14s; }
+.mini-bars span:nth-child(5) { height: 60%; animation-delay: .18s; }
+.mini-bars span:nth-child(6) { height: 95%; animation-delay: .22s; }
+.mini-bars span:nth-child(7) { height: 70%; animation-delay: .26s; }
+.mini-bars--alt span { background: linear-gradient(180deg, var(--accent-end), var(--blue)); }
+@keyframes barGrow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+
+.stat-box--ring { display: flex; align-items: center; gap: 14px; }
+.stat-ring {
+  --pct: 100;
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: conic-gradient(var(--accent-2) calc(var(--pct) * 1%), var(--surface-2) 0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+  box-shadow: 0 0 20px -5px rgba(91, 127, 255, 0.55);
+}
+.stat-ring::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--bg-elevated);
+}
+.stat-ring .ring-val {
+  position: relative;
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
 
 /* ---- Mobile / responsive ---- */
 .mobile-topbar { display: none; }
@@ -923,13 +1113,15 @@ button { font-family: inherit; }
           </div>
         </div>
         <div class="chat-header-actions">
+          <div class="hud-clock" id="hud-clock">--:--:--</div>
           <button class="icon-btn" id="clear-chat" title="Ryd samtale">&#128465;&#65039;</button>
         </div>
       </div>
 
       <div class="messages" id="messages">
         <div class="messages-inner" id="messages-inner">
-          <div class="empty-state" id="empty-state">
+          <div class="empty-state hud-corners always-on" id="empty-state">
+            <span class="empty-eyebrow"><span class="dot-live"></span>AI ASSISTENT</span>
             <div class="blob-wrap"><div class="blob blob-lg" id="empty-blob"><div class="blob-shine"></div></div></div>
             <h2>Hej! Hvad kan jeg hjælpe med?</h2>
             <p>Spørg om hvad som helst — jeg svarer direkte og søger selv på nettet, hvis det kræver aktuel information. Skriv "brug email-agent" for at tale med en specialist-agent.</p>
@@ -1023,9 +1215,20 @@ button { font-family: inherit; }
             <h2>Platform-status</h2>
             <div class="hint">Live nøgletal fra API'et</div>
             <div class="stat-grid" id="settings-stats">
-              <div class="stat-box"><div class="val">—</div><div class="lbl">Tokens brugt</div></div>
-              <div class="stat-box"><div class="val">—</div><div class="lbl">Estimeret kostpris</div></div>
-              <div class="stat-box"><div class="val">7</div><div class="lbl">Agenter aktive</div></div>
+              <div class="stat-box">
+                <div class="lbl">Tokens brugt</div>
+                <div class="val">—</div>
+                <div class="mini-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+              </div>
+              <div class="stat-box">
+                <div class="lbl">Estimeret kostpris</div>
+                <div class="val">—</div>
+                <div class="mini-bars mini-bars--alt" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+              </div>
+              <div class="stat-box stat-box--ring">
+                <div class="stat-ring" style="--pct:100"><span class="ring-val">7</span></div>
+                <div class="lbl">Agenter aktive</div>
+              </div>
             </div>
           </div>
 
@@ -1387,7 +1590,7 @@ async function loadAgents() {
       const completed = a.stats?.tasks_completed ?? 0;
       const errors = a.stats?.errors ?? 0;
       return `
-        <div class="agent-card" style="animation-delay:${i * 40}ms">
+        <div class="agent-card hud-corners" style="animation-delay:${i * 40}ms">
           <div class="agent-card-top">
             <div class="agent-icon">${meta.icon}</div>
             <div class="agent-card-title">
@@ -1572,6 +1775,15 @@ function initMorningMode() {
     }, 1300);
   }, 60000);
 }
+
+/* ============ HUD CLOCK ============ */
+function updateHudClock() {
+  const el = document.getElementById('hud-clock');
+  if (!el) return;
+  el.textContent = new Date().toLocaleTimeString('da-DK', { hour12: false });
+}
+updateHudClock();
+setInterval(updateHudClock, 1000);
 
 /* ============ INIT ============ */
 loadSettingsStats();
