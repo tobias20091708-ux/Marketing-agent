@@ -48,13 +48,8 @@ LOCAL_TZ = ZoneInfo("Europe/Copenhagen")
 
 
 @app.on_event("startup")
-async def ensure_alarms_table():
-    """Idempotently ensure the alarms table exists.
-
-    Railway's managed Postgres doesn't auto-run init.sql-style scripts, so
-    the app creates the table itself on boot (see alarms_migration.sql for
-    the same DDL, kept for manual/documentation purposes).
-    """
+async def ensure_tables():
+    """Idempotently ensure required tables exist."""
     async with async_session() as db:
         await db.execute(
             text("""
@@ -69,6 +64,21 @@ async def ensure_alarms_table():
             """)
         )
         await db.execute(text("CREATE INDEX IF NOT EXISTS idx_alarms_active ON alarms(active)"))
+
+        # Conversation history for chat memory
+        await db.execute(
+            text("""
+                CREATE TABLE IF NOT EXISTS chat_messages (
+                    id SERIAL PRIMARY KEY,
+                    session_id VARCHAR(100) NOT NULL DEFAULT 'default',
+                    role VARCHAR(20) NOT NULL,
+                    content TEXT NOT NULL,
+                    agent_id VARCHAR(50),
+                    created_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            """)
+        )
+        await db.execute(text("CREATE INDEX IF NOT EXISTS idx_chat_session ON chat_messages(session_id, created_at DESC)"))
         await db.commit()
 
 
@@ -310,11 +320,43 @@ async def search_memory(namespace: str, query: str, limit: int = 5):
 class ChatRequest(BaseModel):
     message: str
     agent_id: Optional[str] = None
+    session_id: str = "default"
+
+
+async def get_chat_history(session_id: str, limit: int = 30) -> list[dict]:
+    """Fetch recent chat messages for a session."""
+    async with async_session() as db:
+        result = await db.execute(
+            text("""
+                SELECT role, content FROM (
+                    SELECT role, content, created_at
+                    FROM chat_messages
+                    WHERE session_id = :sid
+                    ORDER BY created_at DESC
+                    LIMIT :limit
+                ) sub ORDER BY created_at ASC
+            """),
+            {"sid": session_id, "limit": limit},
+        )
+        return [{"role": r[0], "content": r[1]} for r in result.fetchall()]
+
+
+async def save_chat_message(session_id: str, role: str, content: str, agent_id: str = None):
+    """Save a chat message to history."""
+    async with async_session() as db:
+        await db.execute(
+            text("""
+                INSERT INTO chat_messages (session_id, role, content, agent_id)
+                VALUES (:sid, :role, :content, :agent_id)
+            """),
+            {"sid": session_id, "role": role, "content": content, "agent_id": agent_id},
+        )
+        await db.commit()
 
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    """Chat with an agent.
+    """Chat with an agent, with conversation history.
 
     The personal assistant handles every message directly with a single AI
     call (including automatic web search when needed). It only routes to a
@@ -328,24 +370,48 @@ async def chat(req: ChatRequest):
         await audit.log_action(
             "personal-assistant", "alarm_created_via_chat", {"time": alarm_time}
         )
-        return {
-            "response": f"Alarm sat til kl. {alarm_time} ⏰ (gentages dagligt)",
-            "agent": "personal-assistant",
-            "alarm": alarm,
-        }
+        reply = f"Alarm sat til kl. {alarm_time} ⏰ (gentages dagligt)"
+        await save_chat_message(req.session_id, "user", req.message, "personal-assistant")
+        await save_chat_message(req.session_id, "assistant", reply, "personal-assistant")
+        return {"response": reply, "agent": "personal-assistant", "alarm": alarm}
 
     if req.agent_id and req.agent_id in AGENTS:
         agent_id = req.agent_id
     else:
         agent_id = detect_explicit_agent(req.message) or "personal-assistant"
 
-    agent = get_agent(agent_id)
-    # Only the personal assistant gets live web search — specialist agents
-    # work off the DB/integrations they already have.
-    tools = [WEB_SEARCH_TOOL] if agent_id == "personal-assistant" else None
-    response = await agent.quick_think(req.message, tools=tools)
+    # Get conversation history
+    history = await get_chat_history(req.session_id)
 
-    return {"response": response, "agent": agent_id}
+    agent = get_agent(agent_id)
+    tools = [WEB_SEARCH_TOOL] if agent_id == "personal-assistant" else None
+
+    # Build messages with history + current message
+    messages = history + [{"role": "user", "content": req.message}]
+    response = await ai.think(
+        system=agent.system_prompt,
+        messages=messages,
+        tools=tools,
+    )
+    reply = response["text"]
+
+    # Save both user message and response
+    await save_chat_message(req.session_id, "user", req.message, agent_id)
+    await save_chat_message(req.session_id, "assistant", reply, agent_id)
+
+    return {"response": reply, "agent": agent_id}
+
+
+@app.delete("/api/chat/history/{session_id}")
+async def clear_chat_history(session_id: str):
+    """Clear conversation history for a session."""
+    async with async_session() as db:
+        await db.execute(
+            text("DELETE FROM chat_messages WHERE session_id = :sid"),
+            {"sid": session_id},
+        )
+        await db.commit()
+    return {"cleared": True, "session_id": session_id}
 
 
 # === WEB SEARCH ===
